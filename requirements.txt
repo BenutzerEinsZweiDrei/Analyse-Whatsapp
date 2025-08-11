@@ -1,3 +1,5 @@
 streamlit
 empath
 emot
+textrazor
+nltk
