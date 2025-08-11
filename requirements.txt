@@ -3,3 +3,4 @@ empath
 emot
 textrazor
 nltk
+g4f
