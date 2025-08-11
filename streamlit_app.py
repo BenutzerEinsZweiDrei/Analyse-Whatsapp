@@ -14,8 +14,14 @@ import io
 textrazor.api_key = "2decf4a27aec43292ef8f925ff7b230db1c2589f94a52acbf147a9a7"
 client = textrazor.TextRazor(extractors=["topics"]) 
 
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
+
+# Sicherstellen, dass die benötigten NLTK Daten vorhanden sind
+for resource in ['punkt', 'averaged_perceptron_tagger']:
+    try:
+        nltk.data.find(f'tokenizers/{resource}' if resource == 'punkt' else f'taggers/{resource}')
+    except LookupError:
+        nltk.download(resource)
+
 
 def parse_conversations_from_text(text):
     conversations = [conv.strip() for conv in re.split(r'\n\s*\n', text) if conv.strip()]
