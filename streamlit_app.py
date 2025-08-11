@@ -62,6 +62,48 @@ def extract_nouns(text):
     nouns = [word for word, pos in tagged_tokens if pos in ('NNP', 'NNPS')]
     return nouns
 
+
+def bewerte_emoji_string(text, json_path='data/emos.json'):
+    # JSON mit Emojis und Bedeutungen laden
+    with open(json_path, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    # emoji -> meaning Dictionary erstellen
+    emoji_dict = {entry["emoji"]: entry["meaning"] for entry in data["emojis"]}
+
+    # Emoji-Regex (für die meisten Emojis)
+    emoji_pattern = re.compile("["
+                               "\U0001F600-\U0001F64F"  # Emoticons
+                               "\U0001F300-\U0001F5FF"  # Symbole & Piktogramme
+                               "\U0001F680-\U0001F6FF"  # Transport & Karten
+                               "\U0001F1E0-\U0001F1FF"  # Flaggen (regional)
+                               "]+", flags=re.UNICODE)
+
+    # Alle Emojis aus dem Text extrahieren
+    emojis_im_text = emoji_pattern.findall(text)
+
+    # Score berechnen
+    score = 0
+    for em in emojis_im_text:
+        meaning = emoji_dict.get(em, "neutral")
+        if meaning == "positiv":
+            score += 1
+        elif meaning == "traurig":
+            score -= 1
+        # neutral oder nicht vorhanden = 0 Punkte
+
+    # Bewertung basierend auf Score zurückgeben
+    if score >= 3:
+        return "sehr positiv"
+    elif 1 <= score <= 2:
+        return "eher positiv"
+    elif -2 <= score <= -1:
+        return "eher traurig"
+    elif score <= -3:
+        return "sehr traurig"
+    else:
+        return "neutral"
+
 def analyze_conversations(data, user_input):
     lexicon = Empath()
     emot_obj = emot.core.emot()
@@ -118,7 +160,9 @@ def group_by_emoji(matrix):
     merged = {}
     for emoji_key, group in emoji_groups.items():
         all_words = group["lex"] | group["keywords"] | group["nouns"]
-        merged[emoji_key] = " ".join(sorted(all_words))
+        merged[bewerte_emoji_string(emoji_key)] = " ".join(sorted(all_words))
+        
+
     return merged
 
 # --- Streamlit UI ---
