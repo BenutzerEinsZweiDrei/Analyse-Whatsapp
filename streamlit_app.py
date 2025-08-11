@@ -179,11 +179,21 @@ if uploaded_file and user_input:
             matrix, mergetext = analyze_conversations(data, user_input)
             merged_by_emoji = group_by_emoji(matrix)
 
+            fullmerge = ""
             st.header("Zusammengeführte Texte je Emoji-Gruppe")
             for emoji_key, merged_text in merged_by_emoji.items():
-                st.subheader(f"Emoji-Gruppe: {bewerte_emoji_string(emoji_key)}")
-                st.write(merged_text if merged_text else "_Keine Wörter gefunden_")
-
+                sh = f"Emoji-Gruppe: {bewerte_emoji_string(emoji_key)}"
+                st.subheader(sh)
+                sw = merged_text if merged_text else "_Keine Wörter gefunden_"
+                st.write(sw)
+                fullmerge = fullmerge + sh + "\n" + sw + "\n"
+            
+            response = g4f.ChatCompletion.create(
+                model=g4f.models.gpt_4,
+                messages=[{"role": "user", "content": "Beschreibe mich kurz anhand der folgenden Informationen aus einer Whatsapp Chat Analyse: " + fullmerge}],
+            )  
+            st.write(response)
+            
             # Download conv_matrix.json
             json_str = json.dumps(matrix, ensure_ascii=False, indent=4)
             st.download_button(
