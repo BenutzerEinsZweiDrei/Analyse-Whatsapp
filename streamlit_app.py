@@ -16,7 +16,7 @@ client = textrazor.TextRazor(extractors=["topics"])
 
 
 # Sicherstellen, dass die benötigten NLTK Daten vorhanden sind
-for resource in ['punkt', 'averaged_perceptron_tagger']:
+for resource in ['punkt', 'punkt_tab', 'averaged_perceptron_tagger', 'averaged_perceptron_tagger_eng']:
     try:
         nltk.data.find(f'tokenizers/{resource}' if resource == 'punkt' else f'taggers/{resource}')
     except LookupError:
