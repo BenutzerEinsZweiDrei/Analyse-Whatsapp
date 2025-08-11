@@ -160,7 +160,7 @@ def group_by_emoji(matrix):
     merged = {}
     for emoji_key, group in emoji_groups.items():
         all_words = group["lex"] | group["keywords"] | group["nouns"]
-        merged[bewerte_emoji_string(emoji_key)] = " ".join(sorted(all_words))
+        merged[emoji_key] = " ".join(sorted(all_words))
         
 
     return merged
@@ -181,7 +181,7 @@ if uploaded_file and user_input:
 
             st.header("Zusammengeführte Texte je Emoji-Gruppe")
             for emoji_key, merged_text in merged_by_emoji.items():
-                st.subheader(f"Emoji-Gruppe: {emoji_key}")
+                st.subheader(f"Emoji-Gruppe: {bewerte_emoji_string(emoji_key)}")
                 st.write(merged_text if merged_text else "_Keine Wörter gefunden_")
 
             # Download conv_matrix.json
