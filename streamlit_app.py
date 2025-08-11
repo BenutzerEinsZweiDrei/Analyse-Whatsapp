@@ -10,6 +10,7 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.tag import pos_tag
 import io
+import g4f
 
 textrazor.api_key = "2decf4a27aec43292ef8f925ff7b230db1c2589f94a52acbf147a9a7"
 client = textrazor.TextRazor(extractors=["topics"]) 
