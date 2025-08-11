@@ -1,7 +1,6 @@
 import re
 import json
 from datetime import datetime
-import time
 
 import streamlit as st
 import emot
@@ -49,11 +48,14 @@ def analyze_conversations(conversations, user_input):
     mergetext = {}
 
     for idx, conv_msgs in enumerate(conversations, 1):
-        matrix[idx] = {"idx": idx}
         # Filter messages from specified user
         user_msgs = [msg["message"] for msg in conv_msgs if msg.get("user") == user_input]
-        mergetext[idx] = "".join(user_msgs)
-        text = mergetext[idx]
+        text = "".join(user_msgs)
+        if not text.strip():
+            # No messages from user in this conversation, skip
+            continue
+
+        matrix[idx] = {"idx": idx}
 
         # Extract emojis
         emoji_result = emot_obj.emoji(text)
@@ -63,6 +65,12 @@ def analyze_conversations(conversations, user_input):
         lex_analysis = lexicon.analyze(text, normalize=True) if text else {}
         filtered_lex = {k: v for k, v in lex_analysis.items() if v > 0}
         matrix[idx]["lex"] = filtered_lex
+
+        mergetext[idx] = text
+
+        # Only keep conversations with emojis or lexicon data
+        if not matrix[idx]["emojies"] and not filtered_lex:
+            del matrix[idx]
 
     return matrix, mergetext
 
@@ -74,45 +82,40 @@ def main():
     user_input = st.text_input("Enter user name to analyze (case sensitive)")
 
     if uploaded_file and user_input:
-        text = uploaded_file.read().decode("utf-8")
-        st.subheader("Parsing conversations...")
-        conversations = parse_conversations_from_text(text)
-        st.success(f"Parsed {len(conversations)} conversations.")
+        if st.button("Start Analysis"):
+            text = uploaded_file.read().decode("utf-8")
+            st.subheader("Parsing conversations...")
+            conversations = parse_conversations_from_text(text)
+            st.success(f"Parsed {len(conversations)} conversations.")
 
-        # Show parsed conversations preview
-        with st.expander("Show parsed conversations"):
-            for idx, conv_msgs in enumerate(conversations, 1):
+            st.subheader(f"Analyzing conversations for user: {user_input}")
+            matrix, mergetext = analyze_conversations(conversations, user_input)
+
+            if not matrix:
+                st.info("No conversations found with emojis or lexicon data for this user.")
+                return
+
+            for idx in sorted(matrix.keys()):
                 st.markdown(f"### Conversation {idx}")
-                for msg in conv_msgs:
-                    user = msg['user'] if msg['user'] else 'System'
-                    st.write(f"{msg['date']} {msg['time']} - **{user}**: {msg['message']}")
+                emojis = matrix[idx].get("emojies", [])
+                lex = matrix[idx].get("lex", {})
+                st.write("Emojis:", " ".join(emojis) if emojis else "None")
+                if lex:
+                    st.write("Lexicon analysis:")
+                    for key, value in lex.items():
+                        st.write(f"- {key}: {value}")
+                else:
+                    st.write("No lexicon categories detected.")
 
-        st.subheader(f"Analyzing conversations for user: {user_input}")
-        matrix, mergetext = analyze_conversations(conversations, user_input)
+            # Downloads for JSON files
+            if st.button("Download parsed conversations JSON"):
+                json_data = json.dumps(conversations, ensure_ascii=False, indent=4)
+                st.download_button("Download JSON", data=json_data, file_name="konversationen.json", mime="application/json")
 
-        # Show analysis results
-        for idx in sorted(matrix.keys()):
-            st.markdown(f"#### Conversation {idx}")
-            emojis = matrix[idx].get("emojies", [])
-            lex = matrix[idx].get("lex", {})
-            st.write("Emojis:", " ".join(emojis) if emojis else "None")
-            if lex:
-                st.write("Lexicon analysis:")
-                for key, value in lex.items():
-                    st.write(f"- {key}: {value}")
-            else:
-                st.write("No lexicon categories detected.")
-
-        # Provide downloads
-        if st.button("Download parsed conversations JSON"):
-            json_data = json.dumps(conversations, ensure_ascii=False, indent=4)
-            st.download_button("Download JSON", data=json_data, file_name="konversationen.json", mime="application/json")
-
-        if st.button("Download analysis matrix JSON"):
-            json_data = json.dumps(matrix, ensure_ascii=False, indent=4)
-            st.download_button("Download JSON", data=json_data, file_name="conv_matrix.json", mime="application/json")
+            if st.button("Download analysis matrix JSON"):
+                json_data = json.dumps(matrix, ensure_ascii=False, indent=4)
+                st.download_button("Download JSON", data=json_data, file_name="conv_matrix.json", mime="application/json")
 
 
 if __name__ == "__main__":
     main()
-
