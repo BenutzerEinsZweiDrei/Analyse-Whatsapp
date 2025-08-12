@@ -82,7 +82,8 @@ def preprocess(text):
     text = text.lower()
     tokens = word_tokenize(text)
     tokens = [t for t in tokens if t not in string.punctuation]
-    extra_stopwords = {"jetzt", "json"}
+    with open('stwd.json', 'r', encoding='utf-8') as file:
+        extra_stopwords = json.load(file)
     stop_words = set(stopwords.words('german'))
     stop_words.update(extra_stopwords)
     tokens = [t for t in tokens if t not in stop_words]
@@ -105,13 +106,10 @@ def bewerte_emoji_string(emojis_im_text, emoji_dict=None):
     if not emojis_im_text:
         return ""
     if emoji_dict is None:
-        # Minimal emoji dict fallback (you can expand or ask for upload)
-        emoji_dict = {
-            "😊": "positiv",
-            "😢": "traurig",
-            "😠": "traurig",
-            "❤️": "positiv",
-            "😂": "positiv",
+        with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    emoji_dict = {entry["emoji"]: entry["meaning"] for entry in data["emojis"]}
         }
     score = 0
     num = len(emojis_im_text)
@@ -137,12 +135,8 @@ def bewerte_emoji_string(emojis_im_text, emoji_dict=None):
 
 def rate_text_from_file(word, sentiment_dict=None):
     if sentiment_dict is None:
-        # fallback sentiment dictionary
-        sentiment_dict = {
-            "positive": 5,
-            "neutral": 3,
-            "negative": 1
-        }
+        with open("data/sent_rating.json", "r", encoding="utf-8") as f:
+            sentiment_dict = json.load(f)
     score = sentiment_dict.get(word.lower(), False)
     return [score] if score else []
 
