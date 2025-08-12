@@ -6,6 +6,7 @@ import requests
 from datetime import datetime
 from collections import defaultdict
 
+import g4f
 import emot
 from empath import Empath
 import textrazor
@@ -192,6 +193,7 @@ def run_analysis(file_content, username):
 
 def summarize_matrix(matrix):
     addtopic, negtopic, emo_vars = [], [], []
+    analysis = {}
     for idx, entry in matrix.items():
         emo_bew = entry.get("emo_bew", [])
         topic = entry.get("topic", [])
@@ -213,6 +215,13 @@ def summarize_matrix(matrix):
                     addtopic.append(topic)
                 else:
                     negtopic.append(topic)
+        
+        analysis[idx] = {
+            "topic": topic,
+            "emojies": emo_bew,
+            "sentiment": sentiment,
+            "wordcloud": words
+        }
 
     emo_vars = [x for x in emo_vars if x]
     flat_emo_vars = [x[0] for x in emo_vars]
@@ -242,11 +251,14 @@ def summarize_matrix(matrix):
     addtopic_final = extract_nouns(" ".join(addtopic_set))
     negtopic_final = extract_nouns(" ".join(negtopic_set))
 
+    
+
     return {
         "positive_topics": addtopic_final,
         "negative_topics": negtopic_final,
         "emotion_variability": std_abweichung,
-        "matrix": matrix
+        "matrix": matrix,
+        "analysis": analysis
     }
 
 
@@ -275,6 +287,14 @@ if st.button("Start Analysis"):
         st.write(f"**Negative Topics ({len(summary['negative_topics'])}):** {', '.join(summary['negative_topics'])}")
         st.write(f"**Emotional Variability:** {summary['emotion_variability']:.3f}")
 
+        st.subheader("Analysis")
+        message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
+        message = f'message + {summary["analysis"]}'
+        response = g4f.ChatCompletion.create(
+            model=g4f.models.gpt_4,
+            messages=[{"role": "user", "content": message}],
+        ) 
+        st.write(response)
         st.subheader("Detailed Conversation Matrix")
         st.json(summary['matrix'])
 
