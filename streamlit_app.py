@@ -16,6 +16,9 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import string
 
+# nltk download
+nltk.download('all')
+
 # Setup API keys (consider securing these)
 jina_key = "jina_87f1a0df417c40b589cf8bf99d15deacGrG0M_BhwOAwxoYQTpkjIrLEtAS0"
 textrazor.api_key = "2decf4a27aec43292ef8f925ff7b230db1c2589f94a52acbf147a9a7"
