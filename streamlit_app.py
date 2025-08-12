@@ -106,11 +106,9 @@ def bewerte_emoji_string(emojis_im_text, emoji_dict=None):
     if not emojis_im_text:
         return ""
     if emoji_dict is None:
-        with open(json_path, "r", encoding="utf-8") as f:
+        with open("data/emos.json", "r", encoding="utf-8") as f:
         data = json.load(f)
-
-    emoji_dict = {entry["emoji"]: entry["meaning"] for entry in data["emojis"]}
-        }
+        emoji_dict = {entry["emoji"]: entry["meaning"] for entry in data["emojis"]}
     score = 0
     num = len(emojis_im_text)
     if num == 0:
