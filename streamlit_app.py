@@ -85,7 +85,7 @@ def preprocess(text):
     text = text.lower()
     tokens = word_tokenize(text)
     tokens = [t for t in tokens if t not in string.punctuation]
-    with open('stwd.json', 'r', encoding='utf-8') as file:
+    with open('data/stwd.json', 'r', encoding='utf-8') as file:
         extra_stopwords = json.load(file)
     stop_words = set(stopwords.words('german'))
     stop_words.update(extra_stopwords)
