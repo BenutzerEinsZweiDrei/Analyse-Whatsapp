@@ -4,3 +4,5 @@ emot
 textrazor
 nltk
 g4f
+requests
+regex
