@@ -21,7 +21,7 @@ import string
 nltk.download('all')
 
 # Setup API keys (consider securing these)
-jina_key = "jina_87f1a0df417c40b589cf8bf99d15deacGrG0M_BhwOAwxoYQTpkjIrLEtAS0"
+jina_key = "jina_7010ba5005d74ef7bf3d3d767638ad97BnKkR5OSxO1hxE9qSpR4I943z-2K"
 textrazor.api_key = "2decf4a27aec43292ef8f925ff7b230db1c2589f94a52acbf147a9a7"
 client = textrazor.TextRazor(extractors=["entities"])
 client.set_language_override("ger")
