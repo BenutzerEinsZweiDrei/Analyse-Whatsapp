@@ -5,6 +5,14 @@ import json
 import requests
 from datetime import datetime
 from collections import defaultdict
+import time
+import logging
+import io
+import traceback
+import os
+import platform
+import importlib
+import importlib.metadata
 
 import g4f
 import emot
@@ -17,17 +25,92 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import string
 
-# nltk download
-nltk.download('all')
+# ---------------------------
+# Debug / Logging Setup
+# ---------------------------
+# Memory buffer to show logs in the Streamlit UI
+log_stream = io.StringIO()
+stream_handler = logging.StreamHandler(log_stream)
+stream_handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+)
 
-# Setup API keys (consider securing these)
-jina_key = "jina_7010ba5005d74ef7bf3d3d767638ad97BnKkR5OSxO1hxE9qSpR4I943z-2K"
-textrazor.api_key = "2decf4a27aec43292ef8f925ff7b230db1c2589f94a52acbf147a9a7"
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+)
+
+logger = logging.getLogger("whatsapp_analyzer")
+logger.setLevel(logging.INFO)
+# Attach handlers if not attached yet (avoid duplicate handlers on rerun)
+if not logger.handlers:
+    logger.addHandler(stream_handler)
+    logger.addHandler(console_handler)
+
+
+def set_debug_mode(enabled: bool):
+    logger.setLevel(logging.DEBUG if enabled else logging.INFO)
+    # clear log buffer on mode change
+    log_stream.truncate(0)
+    log_stream.seek(0)
+    logger.debug(f"Debug mode set to {enabled}")
+
+
+def get_logs() -> str:
+    logger.debug("Collecting logs from buffer")
+    stream_handler.flush()
+    return log_stream.getvalue()
+
+
+def mask_key(key: str) -> str:
+    if not key:
+        return "<empty>"
+    if len(key) <= 8:
+        return key[:2] + "..." + key[-2:]
+    return key[:4] + "..." + key[-4:]
+
+
+# ---------------------------
+# Environment and API keys
+# Prefer st.secrets or environment variables; fallback to hard-coded (kept for compatibility)
+# ---------------------------
+jina_key = os.environ.get("JINA_API_KEY") or st.secrets.get("JINA_API_KEY", None) if hasattr(st, "secrets") else None
+if not jina_key:
+    jina_key = "jina_7010ba5005d74ef7bf3d3d767638ad97BnKkR5OSxO1hxE9qSpR4I943z-2K"  # fallback (consider removing)
+    logger.warning("Using fallback hard-coded jina_key. Consider setting JINA_API_KEY in env or Streamlit secrets.")
+
+textrazor_key = os.environ.get("TEXTRAZOR_API_KEY") or (st.secrets.get("TEXTRAZOR_API_KEY", None) if hasattr(st, "secrets") else None)
+if not textrazor_key:
+    textrazor_key = "2decf4a27aec43292ef8f925ff7b230db1c2589f94a52acbf147a9a7"  # fallback
+    logger.warning("Using fallback hard-coded textrazor key. Consider setting TEXTRAZOR_API_KEY in env or Streamlit secrets.")
+
+textrazor.api_key = textrazor_key
 client = textrazor.TextRazor(extractors=["entities"])
 client.set_language_override("ger")
 
-# NLP helpers (reuse your functions here, but refactor to use in Streamlit)
+# ---------------------------
+# NLTK downloads (only the common ones required)
+# ---------------------------
+# Download the minimum set and log. Avoid 'all' which is heavy.
+nltk_needed = ["punkt", "wordnet", "averaged_perceptron_tagger", "stopwords", "omw-1.4"]
+for res in nltk_needed:
+    try:
+        nltk.data.find(res)
+        logger.debug(f"NLTK resource already present: {res}")
+    except LookupError:
+        logger.info(f"NLTK resource {res} not found. Downloading...")
+        try:
+            nltk.download(res)
+            logger.info(f"Downloaded NLTK resource: {res}")
+        except Exception as e:
+            logger.exception(f"Failed to download NLTK resource {res}: {e}")
+
+# ---------------------------
+# Helpers
+# ---------------------------
 def classify_texts(inputs, labels, model="jina-embeddings-v3", api_key=None):
+    start = time.time()
+    logger.debug("Calling classify_texts: model=%s labels_count=%d", model, len(labels) if labels else 0)
     if api_key is None:
         raise ValueError("API Key must be provided.")
     url = "https://api.jina.ai/v1/classify"
@@ -40,17 +123,29 @@ def classify_texts(inputs, labels, model="jina-embeddings-v3", api_key=None):
         "input": inputs,
         "labels": labels,
     }
-    response = requests.post(url, headers=headers, json=data)
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        response.raise_for_status()
+        elapsed = time.time() - start
+        logger.debug("classify_texts response status: %s time: %.2fs", response.status_code, elapsed)
+        # Avoid logging full content - just size and truncated body for debug
+        text_len = len(response.text or "")
+        logger.debug("classify_texts response length: %d", text_len)
+        truncated = (response.text[:1000] + "...") if text_len > 1000 else response.text
+        logger.debug("classify_texts truncated response: %s", truncated)
+        return response.json()
+    except Exception as e:
+        logger.exception("Error in classify_texts: %s", e)
+        raise
+
 
 def parse_conversations_from_text(text):
-    conversations = [
-        conv.strip() for conv in re.split(r"\n\s*\n", text) if conv.strip()
-    ]
+    logger.debug("parse_conversations_from_text: input length=%d", len(text or ""))
+    conversations = [conv.strip() for conv in re.split(r"\n\s*\n", text) if conv.strip()]
+    logger.debug("Found %d conversation blocks", len(conversations))
     pattern = re.compile(r"^(\d{2}\.\d{2}\.\d{2}), (\d{2}:\d{2}) - (.*)", re.MULTILINE)
     all_conversations = []
-    for conv in conversations:
+    for ci, conv in enumerate(conversations, start=1):
         messages = []
         for match in pattern.finditer(conv):
             date_str, time_str, rest = match.groups()
@@ -58,45 +153,72 @@ def parse_conversations_from_text(text):
                 user, msg = rest.split(": ", 1)
             else:
                 user, msg = None, rest
-            dt = datetime.strptime(f"{date_str} {time_str}", "%y.%m.%d %H:%M")
+            try:
+                dt = datetime.strptime(f"{date_str} {time_str}", "%y.%m.%d %H:%M")
+            except Exception:
+                # Fallback for unexpected date formats
+                try:
+                    dt = datetime.strptime(f"{date_str} {time_str}", "%d.%m.%y %H:%M")
+                except Exception:
+                    dt = None
+                    logger.debug("Failed to parse datetime for line: %s", match.group(0))
             messages.append({
-                "datetime": dt.isoformat(),
+                "datetime": dt.isoformat() if dt else None,
                 "date": date_str,
                 "time": time_str,
                 "user": user,
                 "message": msg.strip(),
             })
-        messages.sort(key=lambda x: (x["datetime"], x["user"] or "zzz"))
+        messages.sort(key=lambda x: (x["datetime"] or "", x["user"] or "zzz"))
+        logger.debug("Conversation #%d -> messages parsed: %d", ci, len(messages))
         all_conversations.append(messages)
+    logger.info("Total parsed conversations: %d", len(all_conversations))
     return all_conversations
 
-# Add your preprocess, extract_nouns, bewerte_emoji_string, rate_text_from_file here exactly as you wrote them,
-# But modify preprocess to load stwd.json from a fixed path or a default list for stopwords,
-# and bewerte_emoji_string to load emos.json from a fixed path or embed example emojis (or ask user to upload)
 
 def get_keywords(text):
     # Placeholder for now
+    logger.debug("get_keywords called (placeholder)")
     return ["limit reached"]
 
+
 def get_relevance(text):
+    logger.debug("get_relevance called (placeholder)")
     return ["limit reached"][:10]
 
+
 def preprocess(text):
-    # Basic preprocessing similar to your version without file loading to simplify
+    logger.debug("Preprocess called: input length=%d", len(text or ""))
     text = text.lower()
     tokens = word_tokenize(text)
     tokens = [t for t in tokens if t not in string.punctuation]
-    with open('data/stwd.json', 'r', encoding='utf-8') as file:
-        extra_stopwords = json.load(file)
-    stop_words = set(stopwords.words('german'))
-    stop_words.update(extra_stopwords)
+    stop_words = set()
+    try:
+        stop_words = set(stopwords.words('german'))
+    except Exception:
+        logger.exception("Could not load NLTK german stopwords; continuing without them.")
+    # Try to load extra stopwords file
+    try:
+        with open('data/stwd.json', 'r', encoding='utf-8') as file:
+            extra_stopwords = json.load(file)
+            logger.debug("Loaded %d extra stopwords from data/stwd.json", len(extra_stopwords) if extra_stopwords else 0)
+            stop_words.update(extra_stopwords)
+    except FileNotFoundError:
+        logger.warning("data/stwd.json not found; proceeding without extra stopwords.")
+    except Exception:
+        logger.exception("Error reading data/stwd.json; proceeding without extra stopwords.")
     tokens = [t for t in tokens if t not in stop_words]
     lemmatizer = WordNetLemmatizer()
     tokens = [lemmatizer.lemmatize(t) for t in tokens]
+    logger.debug("Preprocess result tokens=%d", len(tokens))
     return tokens
 
+
 def extract_nouns(text):
+    logger.debug("extract_nouns called")
     tokens = preprocess(text)
+    if not tokens:
+        return []
     tagged_tokens = pos_tag(tokens)
     filter_tags = {
         "VB", "VBD", "VBG", "VBN", "VBP", "VBZ",
@@ -104,15 +226,27 @@ def extract_nouns(text):
         "RB", "RBR", "RBS",
         "RP"
     }
-    return [word for word, pos in tagged_tokens if pos in ("NN","NNS","NNP","NNPS") and pos not in filter_tags]
+    nouns = [word for word, pos in tagged_tokens if pos in ("NN", "NNS", "NNP", "NNPS") and pos not in filter_tags]
+    logger.debug("extract_nouns found %d nouns", len(nouns))
+    return nouns
+
 
 def bewerte_emoji_string(emojis_im_text, emoji_dict=None):
+    logger.debug("bewerte_emoji_string called with %d emojis", len(emojis_im_text) if emojis_im_text else 0)
     if not emojis_im_text:
         return ""
     if emoji_dict is None:
-        with open("data/emos.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
-            emoji_dict = {entry["emoji"]: entry["meaning"] for entry in data["emojis"]}
+        try:
+            with open("data/emos.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+                emoji_dict = {entry["emoji"]: entry["meaning"] for entry in data["emojis"]}
+                logger.debug("Loaded emojis mapping (%d entries) from data/emos.json", len(emoji_dict))
+        except FileNotFoundError:
+            logger.warning("data/emos.json not found; emoji evaluation will be neutral by default.")
+            emoji_dict = {}
+        except Exception:
+            logger.exception("Error loading data/emos.json; emoji evaluation may be incomplete.")
+            emoji_dict = {}
     score = 0
     num = len(emojis_im_text)
     if num == 0:
@@ -135,44 +269,77 @@ def bewerte_emoji_string(emojis_im_text, emoji_dict=None):
     else:
         return "sehr traurig"
 
+
 def rate_text_from_file(word, sentiment_dict=None):
+    logger.debug("rate_text_from_file called for word=%s", word)
     if sentiment_dict is None:
-        with open("data/sent_rating.json", "r", encoding="utf-8") as f:
-            sentiment_dict = json.load(f)
+        try:
+            with open("data/sent_rating.json", "r", encoding="utf-8") as f:
+                sentiment_dict = json.load(f)
+                logger.debug("Loaded sentiment ratings (%d entries)", len(sentiment_dict))
+        except FileNotFoundError:
+            logger.warning("data/sent_rating.json not found; sentiment rating will be empty.")
+            sentiment_dict = {}
+        except Exception:
+            logger.exception("Error reading data/sent_rating.json; sentiment rating will be empty.")
+            sentiment_dict = {}
     score = sentiment_dict.get(word.lower(), False)
     return [score] if score else []
 
+
 def run_analysis(file_content, username):
+    logger.info("run_analysis started for username=%s content_length=%d", username, len(file_content or ""))
+    start_time = time.time()
     empath_lex = Empath()
     emot_obj = emot.core.emot()
     conversations = parse_conversations_from_text(file_content)
+    logger.debug("run_analysis: parsed %d conversations", len(conversations))
     matrix = {}
     mergetext = {}
 
     for idx, conv_msgs in enumerate(conversations, 1):
+        t0 = time.time()
         matrix[idx] = {"idx": idx}
         user_msgs = [msg["message"] for msg in conv_msgs if msg.get("user") == username]
         mergetext[idx] = " ".join(user_msgs)
         text = mergetext[idx]
+        logger.debug("Conversation #%d user messages=%d merged_text_len=%d", idx, len(user_msgs), len(text or ""))
+
         if not text.strip():
+            logger.debug("Conversation #%d skipped (no user messages)", idx)
             continue
 
-        emoji_result = emot_obj.emoji(text)
-        matrix[idx]["emojies"] = emoji_result.get("value", [])
-        matrix[idx]["emo_bew"] = [bewerte_emoji_string(matrix[idx]["emojies"])]
-        
-        lex_analysis = empath_lex.analyze(text, normalize=True) if text else {}
-        filtered_lex = {k: v for k, v in lex_analysis.items() if v > 0}
-        matrix[idx]["lex"] = filtered_lex
+        try:
+            emoji_result = emot_obj.emoji(text)
+            matrix[idx]["emojies"] = emoji_result.get("value", [])
+            matrix[idx]["emo_bew"] = [bewerte_emoji_string(matrix[idx]["emojies"])]
+            logger.debug("Conversation #%d emojis=%d emo_bew=%s", idx, len(matrix[idx]["emojies"]), matrix[idx]["emo_bew"])
+        except Exception:
+            logger.exception("Error extracting emojis for conversation %d", idx)
+            matrix[idx]["emojies"] = []
+            matrix[idx]["emo_bew"] = ["error"]
 
-        if filtered_lex:
-            categories = list(filtered_lex.keys())
+        try:
+            lex_analysis = empath_lex.analyze(text, normalize=True) if text else {}
+            filtered_lex = {k: v for k, v in lex_analysis.items() if v > 0}
+            matrix[idx]["lex"] = filtered_lex
+            logger.debug("Conversation #%d empath categories=%d", idx, len(filtered_lex))
+        except Exception:
+            logger.exception("Error running Empath analysis for conversation %d", idx)
+            matrix[idx]["lex"] = {}
+
+        if matrix[idx].get("lex"):
+            categories = list(matrix[idx]["lex"].keys())
             try:
+                t_call = time.time()
                 result = classify_texts(text, categories, api_key=jina_key)
+                logger.debug("Conversation #%d classify_texts took %.2fs", idx, time.time() - t_call)
                 sentiment_pred = result["data"][0]["prediction"]
                 matrix[idx]["sentiment"] = [sentiment_pred]
                 matrix[idx]["sent_rating"] = rate_text_from_file(sentiment_pred)
-            except Exception as e:
+                logger.debug("Conversation #%d sentiment=%s sent_rating=%s", idx, sentiment_pred, matrix[idx]["sent_rating"])
+            except Exception:
+                logger.exception("Error classifying sentiment for conversation %d", idx)
                 matrix[idx]["sentiment"] = ["error"]
                 matrix[idx]["sent_rating"] = []
 
@@ -183,15 +350,26 @@ def run_analysis(file_content, username):
 
         categories = matrix[idx]["words"]
         try:
-            result = classify_texts(text, categories, api_key=jina_key)
-            topic_pred = result["data"][0]["prediction"]
-            matrix[idx]["topic"] = [topic_pred]
-        except Exception as e:
+            if categories:
+                result = classify_texts(text, categories, api_key=jina_key)
+                topic_pred = result["data"][0]["prediction"]
+                matrix[idx]["topic"] = [topic_pred]
+                logger.debug("Conversation #%d topic=%s", idx, topic_pred)
+            else:
+                matrix[idx]["topic"] = ["no topic"]
+                logger.debug("Conversation #%d no categories to classify topic", idx)
+        except Exception:
+            logger.exception("Error classifying topic for conversation %d", idx)
             matrix[idx]["topic"] = ["error"]
 
+        logger.debug("Conversation #%d processing time: %.2fs", idx, time.time() - t0)
+
+    logger.info("run_analysis finished in %.2fs", time.time() - start_time)
     return matrix
 
+
 def summarize_matrix(matrix):
+    logger.debug("summarize_matrix called with matrix_size=%d", len(matrix))
     addtopic, negtopic, emo_vars = [], [], []
     analysis = {}
     for idx, entry in matrix.items():
@@ -215,7 +393,7 @@ def summarize_matrix(matrix):
                     addtopic.append(topic)
                 else:
                     negtopic.append(topic)
-        
+
         analysis[idx] = {
             "topic": topic,
             "emojies": emo_bew,
@@ -251,7 +429,7 @@ def summarize_matrix(matrix):
     addtopic_final = extract_nouns(" ".join(addtopic_set))
     negtopic_final = extract_nouns(" ".join(negtopic_set))
 
-    
+    logger.debug("summarize_matrix positive_topics=%d negative_topics=%d", len(addtopic_final), len(negtopic_final))
 
     return {
         "positive_topics": addtopic_final,
@@ -262,47 +440,123 @@ def summarize_matrix(matrix):
     }
 
 
+# ---------------------------
 # Streamlit UI
-st.title("WhatsApp Conversation Analyzer")
+# ---------------------------
+st.title("WhatsApp Conversation Analyzer (with Debug Info)")
+
+# Debug toggle in UI
+debug_mode = st.checkbox("Enable debug mode (show logs and detailed info)", value=False)
+set_debug_mode(debug_mode)
+
+# Show some environment info in debug mode
+if debug_mode:
+    with st.expander("Environment & Dependency Info (debug)"):
+        # Core environment
+        env_info = {
+            "platform": platform.platform(),
+            "python_version": platform.python_version(),
+            "processor": platform.processor(),
+            "cwd": os.getcwd(),
+        }
+        st.write(env_info)
+        # Package versions for important libs
+        key_packages = ["streamlit", "nltk", "textrazor", "empath", "emot", "g4f", "requests", "regex"]
+        pkg_versions = {}
+        for pkg in key_packages:
+            try:
+                pkg_versions[pkg] = importlib.metadata.version(pkg)
+            except Exception:
+                try:
+                    pkg_versions[pkg] = importlib.import_module(pkg).__version__
+                except Exception:
+                    pkg_versions[pkg] = "not installed / unknown"
+        st.write(pkg_versions)
+
+        # Masked keys
+        st.write({
+            "jina_key": mask_key(jina_key),
+            "textrazor_key": mask_key(textrazor_key),
+        })
+        st.write("Note: For production, configure API keys via Streamlit secrets or environment variables.")
 
 uploaded_file = st.file_uploader("Upload your whatsapp.txt file", type=["txt"])
 
 username = st.text_input("Enter the username to analyze")
 
 if st.button("Start Analysis"):
-    if not uploaded_file:
-        st.error("Please upload a whatsapp.txt file.")
-    elif not username.strip():
-        st.error("Please enter a username.")
-    else:
-        file_content = uploaded_file.read().decode("utf-8")
-        with st.spinner("Analyzing conversations... This may take a while."):
-            matrix = run_analysis(file_content, username.strip())
-            summary = summarize_matrix(matrix)
-        
-        st.success("Analysis completed!")
+    try:
+        if not uploaded_file:
+            st.error("Please upload a whatsapp.txt file.")
+            logger.warning("Start Analysis pressed but no file uploaded.")
+        elif not username.strip():
+            st.error("Please enter a username.")
+            logger.warning("Start Analysis pressed but username is empty.")
+        else:
+            file_bytes = uploaded_file.read()
+            file_size = len(file_bytes)
+            logger.info("File uploaded: filename=%s size=%d bytes", getattr(uploaded_file, "name", "<unknown>"), file_size)
+            try:
+                file_content = file_bytes.decode("utf-8")
+            except UnicodeDecodeError:
+                try:
+                    file_content = file_bytes.decode("latin-1")
+                    logger.warning("File decoded with latin-1 fallback.")
+                except Exception:
+                    st.error("Could not decode uploaded file. Please provide a UTF-8 encoded text file.")
+                    logger.exception("Failed to decode uploaded file.")
+                    raise
 
-        st.subheader("Summary")
-        st.write(f"**Positive Topics ({len(summary['positive_topics'])}):** {', '.join(summary['positive_topics'])}")
-        st.write(f"**Negative Topics ({len(summary['negative_topics'])}):** {', '.join(summary['negative_topics'])}")
-        st.write(f"**Emotional Variability:** {summary['emotion_variability']:.3f}")
+            with st.spinner("Analyzing conversations... This may take a while."):
+                total_start = time.time()
+                matrix = run_analysis(file_content, username.strip())
+                summary = summarize_matrix(matrix)
+                total_time = time.time() - total_start
+                logger.info("Full analysis completed in %.2fs", total_time)
 
-        st.subheader("Analysis")
-        message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
-        message = f'message + {summary["analysis"]}'
-        response = g4f.ChatCompletion.create(
-            model=g4f.models.gpt_4,
-            messages=[{"role": "user", "content": message}],
-        ) 
-        st.write(response)
-        st.subheader("Detailed Conversation Matrix")
-        st.json(summary['matrix'])
+            st.success("Analysis completed!")
 
-        # Provide JSON download
-        json_data = json.dumps(summary['matrix'], ensure_ascii=False, indent=4)
-        st.download_button(
-            label="Download conv_matrix.json",
-            data=json_data,
-            file_name="conv_matrix.json",
-            mime="application/json",
-        )
+            st.subheader("Summary")
+            st.write(f"**Positive Topics ({len(summary['positive_topics'])}):** {', '.join(summary['positive_topics'])}")
+            st.write(f"**Negative Topics ({len(summary['negative_topics'])}):** {', '.join(summary['negative_topics'])}")
+            st.write(f"**Emotional Variability:** {summary['emotion_variability']:.3f}")
+
+            st.subheader("Analysis")
+            message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
+            # pass analysis data to model
+            message = f'{message}\n{json.dumps(summary["analysis"], ensure_ascii=False, indent=2)}'
+            try:
+                logger.debug("Sending prompt to g4f model (truncated)")
+                response = g4f.ChatCompletion.create(
+                    model=g4f.models.gpt_4,
+                    messages=[{"role": "user", "content": message}],
+                )
+                logger.debug("g4f response type: %s", type(response))
+            except Exception:
+                logger.exception("Error while calling g4f ChatCompletion")
+                response = "Error while generating profile."
+
+            st.write(response)
+            st.subheader("Detailed Conversation Matrix")
+            st.json(summary['matrix'])
+
+            # Provide JSON download
+            json_data = json.dumps(summary['matrix'], ensure_ascii=False, indent=4)
+            st.download_button(
+                label="Download conv_matrix.json",
+                data=json_data,
+                file_name="conv_matrix.json",
+                mime="application/json",
+            )
+
+            # If debug mode, show logs and offer download
+            if debug_mode:
+                st.subheader("Debug Logs")
+                logs = get_logs()
+                st.text_area("Logs", value=logs, height=300)
+                st.download_button("Download logs", data=logs, file_name="analysis_logs.txt", mime="text/plain")
+    except Exception as main_e:
+        logger.exception("Unhandled exception during analysis: %s", main_e)
+        st.error(f"An unexpected error occurred: {main_e}")
+        if debug_mode:
+            st.exception(main_e)
