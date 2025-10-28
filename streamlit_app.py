@@ -4,7 +4,7 @@ import regex
 import json
 import requests
 from datetime import datetime
-from collections import defaultdict
+from collections import defaultdict, Counter
 import time
 import logging
 import io
@@ -26,6 +26,12 @@ from nltk.stem import WordNetLemmatizer
 import string
 from gensim import corpora
 from gensim.models import LdaModel
+
+# ---------------------------
+# Constants
+# ---------------------------
+# Maximum weight for term frequency in keyword scoring
+MAX_FREQ_WEIGHT = 0.5
 
 # ---------------------------
 # Debug / Logging Setup
@@ -180,7 +186,7 @@ def parse_conversations_from_text(text):
 
 def get_keywords(text, num_topics=3, num_keywords=5):
     """
-    Extract keywords from text using gensim LDA topic modeling.
+    Extract keywords from text using gensim LDA topic modeling with improved filtering.
     
     Args:
         text: Input text to analyze
@@ -188,7 +194,7 @@ def get_keywords(text, num_topics=3, num_keywords=5):
         num_keywords: Number of keywords per topic to return (default: 5)
     
     Returns:
-        List of keywords extracted from the most relevant topics
+        List of keywords extracted from the most relevant topics with frequency weighting
     """
     logger.debug("get_keywords called with gensim topic analysis")
     
@@ -202,6 +208,9 @@ def get_keywords(text, num_topics=3, num_keywords=5):
     if not tokens or len(tokens) < 3:
         logger.debug("Insufficient tokens after preprocessing: %d", len(tokens))
         return []
+    
+    # Calculate term frequencies for importance weighting
+    token_freq = Counter(tokens)
     
     # Create a corpus: list of tokenized documents (we have one document)
     # For LDA, we need at least some variation, so we'll treat the text as if 
@@ -221,8 +230,9 @@ def get_keywords(text, num_topics=3, num_keywords=5):
         # Create dictionary and corpus for gensim
         dictionary = corpora.Dictionary(chunks)
         
-        # Filter extremes: words that appear in less than 1 document or more than 80% of documents
-        dictionary.filter_extremes(no_below=1, no_above=0.8, keep_n=100)
+        # More aggressive filtering: keep terms that appear at least once but not everywhere
+        # and prioritize terms with medium frequency (not too rare, not too common)
+        dictionary.filter_extremes(no_below=1, no_above=0.7, keep_n=100)
         
         if len(dictionary) == 0:
             logger.debug("Dictionary is empty after filtering")
@@ -247,16 +257,24 @@ def get_keywords(text, num_topics=3, num_keywords=5):
             per_word_topics=True
         )
         
-        # Extract keywords from all topics
-        keywords = []
+        # Extract keywords from all topics with probability weighting
+        keyword_scores = {}
         for topic_id in range(actual_num_topics):
             topic_words = lda_model.show_topic(topic_id, topn=num_keywords)
             # topic_words is a list of (word, probability) tuples
             for word, prob in topic_words:
-                if word not in keywords and len(word) > 2:  # Avoid very short words
-                    keywords.append(word)
+                if len(word) > 2:  # Avoid very short words
+                    # Weight by both LDA probability and term frequency
+                    freq_weight = min(token_freq.get(word, 1) / len(tokens), MAX_FREQ_WEIGHT)
+                    combined_score = prob * (1 + freq_weight)
+                    if word not in keyword_scores or combined_score > keyword_scores[word]:
+                        keyword_scores[word] = combined_score
         
-        logger.debug("Extracted %d keywords using gensim LDA", len(keywords))
+        # Sort by combined score and return top keywords
+        sorted_keywords = sorted(keyword_scores.items(), key=lambda x: x[1], reverse=True)
+        keywords = [word for word, score in sorted_keywords]
+        
+        logger.debug("Extracted %d keywords using gensim LDA with frequency weighting", len(keywords))
         return keywords[:15]  # Return top 15 keywords maximum
         
     except Exception as e:
@@ -297,6 +315,10 @@ def preprocess(text):
 
 
 def extract_nouns(text):
+    """
+    Extract meaningful nouns from text with improved filtering.
+    Prioritizes proper nouns and common nouns while filtering out low-quality terms.
+    """
     logger.debug("extract_nouns called")
     tokens = preprocess(text)
     if not tokens:
@@ -308,9 +330,28 @@ def extract_nouns(text):
         "RB", "RBR", "RBS",
         "RP"
     }
+    
+    # Extract nouns with frequency counting
     nouns = [word for word, pos in tagged_tokens if pos in ("NN", "NNS", "NNP", "NNPS") and pos not in filter_tags]
-    logger.debug("extract_nouns found %d nouns", len(nouns))
-    return nouns
+    
+    # Count noun frequencies to prioritize important terms
+    noun_freq = Counter(nouns)
+    
+    # Filter nouns: keep those that appear more than once OR are proper nouns
+    # This helps focus on conversation-relevant topics
+    proper_nouns = {word for word, pos in tagged_tokens if pos in ("NNP", "NNPS")}
+    filtered_nouns = []
+    seen = set()
+    
+    for noun in nouns:
+        if noun not in seen:
+            # Keep if: appears multiple times, is a proper noun, or is sufficiently long
+            if noun_freq[noun] > 1 or noun in proper_nouns or len(noun) > 5:
+                filtered_nouns.append(noun)
+                seen.add(noun)
+    
+    logger.debug("extract_nouns found %d nouns (filtered to %d)", len(nouns), len(filtered_nouns))
+    return filtered_nouns[:20]  # Limit to top 20 most relevant nouns
 
 
 def bewerte_emoji_string(emojis_im_text, emoji_dict=None):
@@ -428,7 +469,27 @@ def run_analysis(file_content, username):
         matrix[idx]["keywords"] = get_keywords(text) if text else []
         matrix[idx]["nouns"] = extract_nouns(text) if text else []
 
-        matrix[idx]["words"] = list(matrix[idx]["nouns"]) + list(matrix[idx]["keywords"]) or ["no topic"]
+        # Combine and deduplicate words with improved filtering
+        # Prioritize keywords (topic modeling results) over simple noun extraction
+        combined_words = []
+        seen_lower = set()
+        
+        # Add keywords first (they're weighted by topic relevance)
+        for keyword in matrix[idx]["keywords"]:
+            keyword_lower = keyword.lower()
+            if keyword_lower not in seen_lower and len(keyword) > 2:
+                combined_words.append(keyword)
+                seen_lower.add(keyword_lower)
+        
+        # Add nouns that aren't already present
+        for noun in matrix[idx]["nouns"]:
+            noun_lower = noun.lower()
+            if noun_lower not in seen_lower and len(noun) > 2:
+                combined_words.append(noun)
+                seen_lower.add(noun_lower)
+        
+        # Limit total categories to avoid noise in classification
+        matrix[idx]["words"] = combined_words[:20] or ["no topic"]
 
         categories = matrix[idx]["words"]
         try:
