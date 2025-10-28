@@ -119,6 +119,8 @@ def merge_mbti(data_list):
     Merge MBTI type counts across multiple profiles.
 
     Sums up the counts for each MBTI type across all files.
+    Handles both simple count format (e.g., {"INTJ": 5}) and 
+    nested dictionary format (e.g., {"INTJ": {"count": 5, ...}}).
 
     Args:
         data_list: List of personality result dictionaries
@@ -132,8 +134,21 @@ def merge_mbti(data_list):
     for data in data_list:
         mbti_summary = data.get("mbti_summary", {})
 
-        for mbti_type, count in mbti_summary.items():
-            if isinstance(count, (int, float)):
+        for mbti_type, value in mbti_summary.items():
+            # Handle both formats:
+            # 1. Simple count: {"INTJ": 5}
+            # 2. Nested dict: {"INTJ": {"count": 5, "mean_reciprocity": 0.75, ...}}
+            if isinstance(value, dict):
+                # Extract count from nested dictionary
+                count = value.get("count", 0)
+            elif isinstance(value, (int, float)):
+                # Direct count value
+                count = value
+            else:
+                # Skip invalid values
+                continue
+            
+            if isinstance(count, (int, float)) and count > 0:
                 mbti_totals[mbti_type] = mbti_totals.get(mbti_type, 0) + count
 
     # Convert to list of dicts and sort by count descending
