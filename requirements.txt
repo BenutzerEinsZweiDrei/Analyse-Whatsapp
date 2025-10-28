@@ -7,3 +7,4 @@ g4f
 requests
 regex
 gensim
+vaderSentiment
