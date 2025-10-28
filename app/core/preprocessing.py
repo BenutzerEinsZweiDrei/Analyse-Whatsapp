@@ -46,6 +46,7 @@ def init_nltk(resources: List[str] = None):
             "wordnet",
             "stopwords",
             "omw-1.4",
+            "averaged_perceptron_tagger_eng"
         ]
 
     for res in resources:
