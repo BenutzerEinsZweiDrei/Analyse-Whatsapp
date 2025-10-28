@@ -424,12 +424,49 @@ def rate_text_from_file(word, sentiment_dict=None):
     return [score] if score else []
 
 
+# ---------------------------
+# Cached Resource Loaders
+# ---------------------------
+@st.cache_resource
+def get_empath_lexicon():
+    """Load Empath lexicon once and cache it."""
+    logger.debug("Initializing Empath lexicon (cached)")
+    return Empath()
+
+
+@st.cache_resource
+def get_emot_object():
+    """Load emot object once and cache it."""
+    logger.debug("Initializing emot object (cached)")
+    return emot.core.emot()
+
+
+@st.cache_resource
+def get_vader_analyzer():
+    """Load VADER sentiment analyzer once and cache it."""
+    logger.debug("Initializing VADER analyzer (cached)")
+    return SentimentIntensityAnalyzer()
+
+
+@st.cache_data(show_spinner=False)
+def cached_run_analysis(file_content: str, username: str):
+    """
+    Cached wrapper for run_analysis to avoid recomputing identical analysis.
+    Uses @st.cache_data so identical file_content + username do not recompute.
+    """
+    logger.info("cached_run_analysis called for username=%s (may use cache)", username)
+    return run_analysis(file_content, username)
+
+
 def run_analysis(file_content, username):
     logger.info("run_analysis started for username=%s content_length=%d", username, len(file_content or ""))
     start_time = time.time()
-    empath_lex = Empath()
-    emot_obj = emot.core.emot()
-    vader_analyzer = SentimentIntensityAnalyzer()  # Initialize once outside the loop
+    # Use cached resources to avoid expensive re-initialization of ML models.
+    # These resources (Empath lexicon, emot parser, VADER analyzer) are heavy
+    # to initialize and are now loaded once per app lifecycle, not per analysis.
+    empath_lex = get_empath_lexicon()
+    emot_obj = get_emot_object()
+    vader_analyzer = get_vader_analyzer()
     conversations = parse_conversations_from_text(file_content)
     logger.debug("run_analysis: parsed %d conversations", len(conversations))
     matrix = {}
@@ -700,6 +737,15 @@ def summarize_matrix(matrix):
 # ---------------------------
 st.title("WhatsApp Conversation Analyzer (with Debug Info)")
 
+# Initialize session state for persistence across reruns
+if "analysis_done" not in st.session_state:
+    st.session_state.analysis_done = False
+    st.session_state.matrix = None
+    st.session_state.summary = None
+    st.session_state.conversation_messages = None
+    st.session_state.file_content = None
+    st.session_state.username = ""
+
 # Debug toggle in UI
 debug_mode = st.checkbox("Enable debug mode (show logs and detailed info)", value=False)
 set_debug_mode(debug_mode)
@@ -735,11 +781,13 @@ if debug_mode:
         })
         st.write("Note: For production, configure API keys via Streamlit secrets or environment variables.")
 
-uploaded_file = st.file_uploader("Upload your whatsapp.txt file", type=["txt"])
+# Use a form for file upload and "Start Analysis" button
+with st.form("analysis_form"):
+    uploaded_file = st.file_uploader("Upload your whatsapp.txt file", type=["txt"])
+    username = st.text_input("Enter the username to analyze")
+    submit_analysis = st.form_submit_button("Start Analysis")
 
-username = st.text_input("Enter the username to analyze")
-
-if st.button("Start Analysis"):
+if submit_analysis:
     try:
         if not uploaded_file:
             st.error("Please upload a whatsapp.txt file.")
@@ -764,218 +812,240 @@ if st.button("Start Analysis"):
 
             with st.spinner("Analyzing conversations... This may take a while."):
                 total_start = time.time()
-                matrix, conversation_messages = run_analysis(file_content, username.strip())
+                # Use cached analysis function
+                matrix, conversation_messages = cached_run_analysis(file_content, username.strip())
                 summary = summarize_matrix(matrix)
                 total_time = time.time() - total_start
                 logger.info("Full analysis completed in %.2fs", total_time)
+            
+            # Store results in session state for persistence
+            st.session_state.matrix = matrix
+            st.session_state.summary = summary
+            st.session_state.conversation_messages = conversation_messages
+            st.session_state.file_content = file_content
+            st.session_state.username = username.strip()
+            st.session_state.analysis_done = True
+            st.session_state.file_size = file_size
+            st.session_state.total_time = total_time
 
             st.success("Analysis completed!")
-
-            st.subheader("Summary")
-            st.write(f"**Positive Topics ({len(summary['positive_topics'])}):** {', '.join(summary['positive_topics'])}")
-            st.write(f"**Negative Topics ({len(summary['negative_topics'])}):** {', '.join(summary['negative_topics'])}")
-            st.write(f"**Emotional Variability:** {summary['emotion_variability']:.3f}")
-
-            # Show the analysis summary to the user BEFORE sending to g4f
-            st.subheader("Analysis Summary")
-            st.json(summary['analysis'])
-            
-            # Add option to download debug info (analysis data)
-            debug_info = {
-                "summary": {
-                    "positive_topics": summary['positive_topics'],
-                    "negative_topics": summary['negative_topics'],
-                    "emotion_variability": summary['emotion_variability']
-                },
-                "analysis": summary['analysis'],
-                "matrix": summary['matrix'],
-                "metadata": {
-                    "username": username.strip(),
-                    "file_size_bytes": file_size,
-                    "total_conversations": len(summary['matrix']),
-                    "analysis_time_seconds": total_time
-                }
-            }
-            debug_json = json.dumps(debug_info, ensure_ascii=False, indent=2)
-            st.download_button(
-                label="Download Complete Analysis (Debug Info)",
-                data=debug_json,
-                file_name="whatsapp_analysis_debug.json",
-                mime="application/json",
-            )
-            
-            # Add button to proceed with g4f analysis
-            if st.button("Generate Psychological Profile with AI"):
-                with st.spinner("Generating AI profile..."):
-                    st.subheader("AI-Generated Psychological Profile")
-                    message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
-                    # pass analysis data to model
-                    message = f'{message}\n{json.dumps(summary["analysis"], ensure_ascii=False, indent=2)}'
-                    
-                    try:
-                        logger.debug("Sending prompt to g4f model (truncated)")
-                        response = None
-                        
-                        # Try using the Client API first (recommended for newer g4f versions)
-                        try:
-                            client = g4f.Client()
-                            response_obj = client.chat.completions.create(
-                                model="gpt-4o-mini",
-                                messages=[{"role": "user", "content": message}],
-                            )
-                            # Extract the content from the response
-                            if hasattr(response_obj, 'choices') and response_obj.choices:
-                                response = response_obj.choices[0].message.content
-                            elif hasattr(response_obj, 'content'):
-                                response = response_obj.content
-                            else:
-                                response_type = type(response_obj).__name__
-                                response_attrs = [a for a in dir(response_obj) if not a.startswith('_')][:5]
-                                logger.warning(
-                                    "Unexpected response structure from Client API: type=%s, attrs=%s", 
-                                    response_type, response_attrs
-                                )
-                                raise AttributeError(
-                                    f"Unable to extract content from response (type: {response_type})"
-                                )
-                            logger.debug("g4f Client API succeeded")
-                        except (AttributeError, ImportError, KeyError) as client_error:
-                            # Fallback to old API for compatibility issues
-                            logger.debug(f"Client API failed: {client_error}, trying ChatCompletion.create")
-                            response = g4f.ChatCompletion.create(
-                                model=g4f.models.gpt_4,
-                                messages=[{"role": "user", "content": message}],
-                            )
-                            logger.debug("g4f ChatCompletion.create succeeded")
-                        
-                        if response:
-                            logger.debug("g4f response type: %s", type(response))
-                            st.write(response)
-                        else:
-                            # This is a different issue - no content was generated
-                            logger.error("No response content generated from g4f")
-                            st.warning(
-                                "⚠️ No AI Profile Generated\n\n"
-                                "The AI service responded but did not generate any content. "
-                                "Please try again or review the detailed analysis data above."
-                            )
-                        
-                    except (g4f.errors.MissingAuthError, g4f.errors.NoValidHarFileError, 
-                            g4f.errors.PaymentRequiredError) as e:
-                        # Authentication and authorization errors
-                        logger.exception("Authentication error with g4f: %s", e)
-                        st.error(
-                            "⚠️ AI Profile Generation Unavailable\n\n"
-                            "The AI service requires authentication or payment. "
-                            "This is likely due to:\n"
-                            "- Provider authentication requirements\n"
-                            "- API key configuration issues\n"
-                            "- Service access restrictions\n\n"
-                            "You can still download and review the detailed analysis data above."
-                        )
-                        if debug_mode:
-                            st.exception(e)
-                    except (g4f.errors.RateLimitError, g4f.errors.ConversationLimitError) as e:
-                        # Rate limiting errors
-                        logger.exception("Rate limit error with g4f: %s", e)
-                        st.error(
-                            "⚠️ AI Profile Generation Unavailable\n\n"
-                            "The AI service rate limit has been reached. "
-                            "Please try again later.\n\n"
-                            "You can still download and review the detailed analysis data above."
-                        )
-                        if debug_mode:
-                            st.exception(e)
-                    except (g4f.errors.ProviderNotWorkingError, g4f.errors.RetryNoProviderError,
-                            g4f.errors.ModelNotFoundError) as e:
-                        # Provider/model availability errors
-                        logger.exception("Provider/model error with g4f: %s", e)
-                        st.error(
-                            "⚠️ AI Profile Generation Unavailable\n\n"
-                            "The AI service provider is currently not available. "
-                            "This is likely due to:\n"
-                            "- Service maintenance or downtime\n"
-                            "- Model unavailability\n"
-                            "- Provider configuration changes\n\n"
-                            "You can still download and review the detailed analysis data above."
-                        )
-                        if debug_mode:
-                            st.exception(e)
-                    except (ConnectionError, g4f.errors.TimeoutError, OSError) as e:
-                        # Network-related errors
-                        logger.exception("Network error while calling g4f: %s", e)
-                        st.error(
-                            "⚠️ AI Profile Generation Unavailable\n\n"
-                            "Unable to connect to the AI service. "
-                            "This is likely due to:\n"
-                            "- Network connectivity issues\n"
-                            "- Service unavailability\n"
-                            "- Firewall or proxy restrictions\n\n"
-                            "You can still download and review the detailed analysis data above."
-                        )
-                        if debug_mode:
-                            st.exception(e)
-                    except (ImportError, AttributeError, KeyError) as e:
-                        # API compatibility or structure errors
-                        logger.exception("Error with g4f API compatibility: %s", e)
-                        st.error(
-                            "⚠️ AI Profile Generation Unavailable\n\n"
-                            "The AI profile generation feature encountered a compatibility issue. "
-                            "This is likely due to:\n"
-                            "- Changes in the g4f library API\n"
-                            "- Unexpected response format\n"
-                            "- Library version mismatch\n\n"
-                            "You can still download and review the detailed analysis data above."
-                        )
-                        if debug_mode:
-                            st.exception(e)
-                    except Exception as e:
-                        # Catch-all for other g4f errors
-                        logger.exception("Unexpected error while calling g4f for AI profile generation")
-                        st.error(
-                            "⚠️ AI Profile Generation Unavailable\n\n"
-                            "The AI profile generation feature encountered an unexpected error. "
-                            "This may be due to:\n"
-                            "- Service configuration issues\n"
-                            "- Temporary service disruption\n"
-                            "- Changes in the g4f library\n\n"
-                            "You can still download and review the detailed analysis data above."
-                        )
-                        if debug_mode:
-                            st.exception(e)
-            
-            st.subheader("Detailed Conversation Matrix")
-            st.json(summary['matrix'])
-
-            # Provide JSON download (kept for backward compatibility)
-            json_data = json.dumps(summary['matrix'], ensure_ascii=False, indent=4)
-            st.download_button(
-                label="Download conv_matrix.json (Matrix Only)",
-                data=json_data,
-                file_name="conv_matrix.json",
-                mime="application/json",
-            )
-
-            # Show logs in debug mode
-            if debug_mode:
-                st.subheader("Debug Logs")
-                logs = get_logs()
-                st.text_area("Logs", value=logs, height=300)
-            
-            # Always offer log download (available even when debug mode is off)
-            st.subheader("Debug Information")
-            logs = get_logs()
-            if logs.strip():
-                st.download_button(
-                    label="Download Analysis Logs", 
-                    data=logs, 
-                    file_name="analysis_logs.txt", 
-                    mime="text/plain"
-                )
-            else:
-                st.info("No logs available. Enable the 'Enable debug mode' checkbox above to capture detailed logs.")
     except Exception as main_e:
         logger.exception("Unhandled exception during analysis: %s", main_e)
         st.error(f"An unexpected error occurred: {main_e}")
         if debug_mode:
             st.exception(main_e)
+
+# Display results if analysis has been done
+if st.session_state.analysis_done:
+    summary = st.session_state.summary
+    matrix = st.session_state.matrix
+    file_size = st.session_state.get("file_size", 0)
+    total_time = st.session_state.get("total_time", 0)
+    
+    st.subheader("Summary")
+    st.write(f"**Positive Topics ({len(summary['positive_topics'])}):** {', '.join(summary['positive_topics'])}")
+    st.write(f"**Negative Topics ({len(summary['negative_topics'])}):** {', '.join(summary['negative_topics'])}")
+    st.write(f"**Emotional Variability:** {summary['emotion_variability']:.3f}")
+
+    # Show the analysis summary to the user BEFORE sending to g4f
+    st.subheader("Analysis Summary")
+    st.json(summary['analysis'])
+    
+    # Add option to download debug info (analysis data)
+    debug_info = {
+        "summary": {
+            "positive_topics": summary['positive_topics'],
+            "negative_topics": summary['negative_topics'],
+            "emotion_variability": summary['emotion_variability']
+        },
+        "analysis": summary['analysis'],
+        "matrix": summary['matrix'],
+        "metadata": {
+            "username": st.session_state.username,
+            "file_size_bytes": file_size,
+            "total_conversations": len(summary['matrix']),
+            "analysis_time_seconds": total_time
+        }
+    }
+    debug_json = json.dumps(debug_info, ensure_ascii=False, indent=2)
+    st.download_button(
+        label="Download Complete Analysis (Debug Info)",
+        data=debug_json,
+        file_name="whatsapp_analysis_debug.json",
+        mime="application/json",
+        key="download_debug_info"
+    )
+    
+    # Add button to proceed with g4f analysis - read from session_state
+    if st.button("Generate Psychological Profile with AI", key="generate_ai"):
+        # Note: This button is only visible when analysis_done is True
+        with st.spinner("Generating AI profile..."):
+            st.subheader("AI-Generated Psychological Profile")
+            message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
+            # pass analysis data to model from session_state
+            message = f'{message}\n{json.dumps(st.session_state.summary["analysis"], ensure_ascii=False, indent=2)}'
+            
+            try:
+                logger.debug("Sending prompt to g4f model (truncated)")
+                response = None
+                
+                # Try using the Client API first (recommended for newer g4f versions)
+                try:
+                    client = g4f.Client()
+                    response_obj = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=[{"role": "user", "content": message}],
+                    )
+                    # Extract the content from the response
+                    if hasattr(response_obj, 'choices') and response_obj.choices:
+                        response = response_obj.choices[0].message.content
+                    elif hasattr(response_obj, 'content'):
+                        response = response_obj.content
+                    else:
+                        response_type = type(response_obj).__name__
+                        response_attrs = [a for a in dir(response_obj) if not a.startswith('_')][:5]
+                        logger.warning(
+                            "Unexpected response structure from Client API: type=%s, attrs=%s", 
+                            response_type, response_attrs
+                        )
+                        raise AttributeError(
+                            f"Unable to extract content from response (type: {response_type})"
+                        )
+                    logger.debug("g4f Client API succeeded")
+                except (AttributeError, ImportError, KeyError) as client_error:
+                    # Fallback to old API for compatibility issues
+                    logger.debug(f"Client API failed: {client_error}, trying ChatCompletion.create")
+                    response = g4f.ChatCompletion.create(
+                        model=g4f.models.gpt_4,
+                        messages=[{"role": "user", "content": message}],
+                    )
+                    logger.debug("g4f ChatCompletion.create succeeded")
+                
+                if response:
+                    logger.debug("g4f response type: %s", type(response))
+                    st.write(response)
+                else:
+                    # This is a different issue - no content was generated
+                    logger.error("No response content generated from g4f")
+                    st.warning(
+                        "⚠️ No AI Profile Generated\n\n"
+                        "The AI service responded but did not generate any content. "
+                        "Please try again or review the detailed analysis data above."
+                    )
+                
+            except (g4f.errors.MissingAuthError, g4f.errors.NoValidHarFileError, 
+                    g4f.errors.PaymentRequiredError) as e:
+                # Authentication and authorization errors
+                logger.exception("Authentication error with g4f: %s", e)
+                st.error(
+                    "⚠️ AI Profile Generation Unavailable\n\n"
+                    "The AI service requires authentication or payment. "
+                    "This is likely due to:\n"
+                    "- Provider authentication requirements\n"
+                    "- API key configuration issues\n"
+                    "- Service access restrictions\n\n"
+                    "You can still download and review the detailed analysis data above."
+                )
+                if debug_mode:
+                    st.exception(e)
+            except (g4f.errors.RateLimitError, g4f.errors.ConversationLimitError) as e:
+                # Rate limiting errors
+                logger.exception("Rate limit error with g4f: %s", e)
+                st.error(
+                    "⚠️ AI Profile Generation Unavailable\n\n"
+                    "The AI service rate limit has been reached. "
+                    "Please try again later.\n\n"
+                    "You can still download and review the detailed analysis data above."
+                )
+                if debug_mode:
+                    st.exception(e)
+            except (g4f.errors.ProviderNotWorkingError, g4f.errors.RetryNoProviderError,
+                    g4f.errors.ModelNotFoundError) as e:
+                # Provider/model availability errors
+                logger.exception("Provider/model error with g4f: %s", e)
+                st.error(
+                    "⚠️ AI Profile Generation Unavailable\n\n"
+                    "The AI service provider is currently not available. "
+                    "This is likely due to:\n"
+                    "- Service maintenance or downtime\n"
+                    "- Model unavailability\n"
+                    "- Provider configuration changes\n\n"
+                    "You can still download and review the detailed analysis data above."
+                )
+                if debug_mode:
+                    st.exception(e)
+            except (ConnectionError, g4f.errors.TimeoutError, OSError) as e:
+                # Network-related errors
+                logger.exception("Network error while calling g4f: %s", e)
+                st.error(
+                    "⚠️ AI Profile Generation Unavailable\n\n"
+                    "Unable to connect to the AI service. "
+                    "This is likely due to:\n"
+                    "- Network connectivity issues\n"
+                    "- Service unavailability\n"
+                    "- Firewall or proxy restrictions\n\n"
+                    "You can still download and review the detailed analysis data above."
+                )
+                if debug_mode:
+                    st.exception(e)
+            except (ImportError, AttributeError, KeyError) as e:
+                # API compatibility or structure errors
+                logger.exception("Error with g4f API compatibility: %s", e)
+                st.error(
+                    "⚠️ AI Profile Generation Unavailable\n\n"
+                    "The AI profile generation feature encountered a compatibility issue. "
+                    "This is likely due to:\n"
+                    "- Changes in the g4f library API\n"
+                    "- Unexpected response format\n"
+                    "- Library version mismatch\n\n"
+                    "You can still download and review the detailed analysis data above."
+                )
+                if debug_mode:
+                    st.exception(e)
+            except Exception as e:
+                # Catch-all for other g4f errors
+                logger.exception("Unexpected error while calling g4f for AI profile generation")
+                st.error(
+                    "⚠️ AI Profile Generation Unavailable\n\n"
+                    "The AI profile generation feature encountered an unexpected error. "
+                    "This may be due to:\n"
+                    "- Service configuration issues\n"
+                    "- Temporary service disruption\n"
+                    "- Changes in the g4f library\n\n"
+                    "You can still download and review the detailed analysis data above."
+                )
+                if debug_mode:
+                    st.exception(e)
+    
+    st.subheader("Detailed Conversation Matrix")
+    st.json(summary['matrix'])
+
+    # Provide JSON download (kept for backward compatibility)
+    json_data = json.dumps(summary['matrix'], ensure_ascii=False, indent=4)
+    st.download_button(
+        label="Download conv_matrix.json (Matrix Only)",
+        data=json_data,
+        file_name="conv_matrix.json",
+        mime="application/json",
+        key="download_matrix_json"
+    )
+
+    # Show logs in debug mode
+    if debug_mode:
+        st.subheader("Debug Logs")
+        logs = get_logs()
+        st.text_area("Logs", value=logs, height=300, key="debug_logs_area")
+    
+    # Always offer log download (available even when debug mode is off)
+    st.subheader("Debug Information")
+    logs = get_logs()
+    if logs.strip():
+        st.download_button(
+            label="Download Analysis Logs", 
+            data=logs, 
+            file_name="analysis_logs.txt", 
+            mime="text/plain",
+            key="download_logs"
+        )
+    else:
+        st.info("No logs available. Enable the 'Enable debug mode' checkbox above to capture detailed logs.")
