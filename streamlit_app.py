@@ -811,18 +811,47 @@ if st.button("Start Analysis"):
                     message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
                     # pass analysis data to model
                     message = f'{message}\n{json.dumps(summary["analysis"], ensure_ascii=False, indent=2)}'
+                    
                     try:
                         logger.debug("Sending prompt to g4f model (truncated)")
-                        response = g4f.ChatCompletion.create(
-                            model=g4f.models.gpt_4,
-                            messages=[{"role": "user", "content": message}],
-                        )
+                        # Try using the Client API first (recommended for newer g4f versions)
+                        try:
+                            client = g4f.Client()
+                            response_obj = client.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[{"role": "user", "content": message}],
+                            )
+                            # Extract the content from the response
+                            if hasattr(response_obj, 'choices') and response_obj.choices:
+                                response = response_obj.choices[0].message.content
+                            else:
+                                response = str(response_obj)
+                            logger.debug("g4f Client API succeeded")
+                        except Exception as client_error:
+                            # Fallback to old API if Client fails
+                            logger.debug(f"Client API failed: {client_error}, trying ChatCompletion.create")
+                            response = g4f.ChatCompletion.create(
+                                model=g4f.models.gpt_4,
+                                messages=[{"role": "user", "content": message}],
+                            )
+                            logger.debug("g4f ChatCompletion.create succeeded")
+                        
                         logger.debug("g4f response type: %s", type(response))
-                    except Exception:
-                        logger.exception("Error while calling g4f ChatCompletion")
-                        response = "Error while generating profile."
-
-                    st.write(response)
+                        st.write(response)
+                        
+                    except Exception as e:
+                        logger.exception("Error while calling g4f for AI profile generation")
+                        st.error(
+                            "⚠️ AI Profile Generation Unavailable\n\n"
+                            "The AI profile generation feature is currently not working. "
+                            "This is likely due to:\n"
+                            "- Changes in the g4f library API\n"
+                            "- Provider authentication requirements\n"
+                            "- Network connectivity issues\n\n"
+                            "You can still download and review the detailed analysis data above."
+                        )
+                        if debug_mode:
+                            st.exception(e)
             
             st.subheader("Detailed Conversation Matrix")
             st.json(summary['matrix'])
