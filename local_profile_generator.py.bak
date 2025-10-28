@@ -1041,7 +1041,8 @@ def highlights_and_rankings(
 
         # Average emotion ratios
         avg_emotion_ratios = {
-            emotion: total / n for emotion, total in agg["emotion_ratio_sums"].items()
+            emotion: total / n
+            for emotion, total in agg["emotion_ratio_sums"].items()
         }
 
         topics_aggregated[topic] = {
@@ -1206,9 +1207,7 @@ def highlights_and_rankings(
         reciprocity_desc = (
             "highly"
             if avg_reciprocity > 0.7
-            else "moderately"
-            if avg_reciprocity > 0.5
-            else "somewhat"
+            else "moderately" if avg_reciprocity > 0.5 else "somewhat"
         )
         emotion_desc = dominant_emotion[0] if emotion_percentages else "neutral"
         response_desc = (
@@ -1251,7 +1250,9 @@ def highlights_and_rankings(
         "final_insight": final_insight if include_final_insight else None,
     }
 
-    logger.debug(f"Generated highlights and rankings for {len(topics_aggregated)} topics")
+    logger.debug(
+        f"Generated highlights and rankings for {len(topics_aggregated)} topics"
+    )
     return result
 
 
