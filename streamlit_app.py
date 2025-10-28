@@ -4,7 +4,7 @@ import regex
 import json
 import requests
 from datetime import datetime
-from collections import defaultdict
+from collections import defaultdict, Counter
 import time
 import logging
 import io
@@ -26,6 +26,12 @@ from nltk.stem import WordNetLemmatizer
 import string
 from gensim import corpora
 from gensim.models import LdaModel
+
+# ---------------------------
+# Constants
+# ---------------------------
+# Maximum weight for term frequency in keyword scoring
+MAX_FREQ_WEIGHT = 0.5
 
 # ---------------------------
 # Debug / Logging Setup
@@ -204,7 +210,6 @@ def get_keywords(text, num_topics=3, num_keywords=5):
         return []
     
     # Calculate term frequencies for importance weighting
-    from collections import Counter
     token_freq = Counter(tokens)
     
     # Create a corpus: list of tokenized documents (we have one document)
@@ -260,7 +265,7 @@ def get_keywords(text, num_topics=3, num_keywords=5):
             for word, prob in topic_words:
                 if len(word) > 2:  # Avoid very short words
                     # Weight by both LDA probability and term frequency
-                    freq_weight = min(token_freq.get(word, 1) / len(tokens), 0.5)  # Cap at 0.5
+                    freq_weight = min(token_freq.get(word, 1) / len(tokens), MAX_FREQ_WEIGHT)
                     combined_score = prob * (1 + freq_weight)
                     if word not in keyword_scores or combined_score > keyword_scores[word]:
                         keyword_scores[word] = combined_score
@@ -327,7 +332,6 @@ def extract_nouns(text):
     }
     
     # Extract nouns with frequency counting
-    from collections import Counter
     nouns = [word for word, pos in tagged_tokens if pos in ("NN", "NNS", "NNP", "NNPS") and pos not in filter_tags]
     
     # Count noun frequencies to prioritize important terms
