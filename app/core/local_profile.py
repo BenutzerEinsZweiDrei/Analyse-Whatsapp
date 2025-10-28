@@ -1539,84 +1539,400 @@ def generate_profile_text(results: Dict) -> str:
         results: Complete results dictionary
 
     Returns:
-        Formatted profile text (3-6 bullet points)
+        Formatted profile text with rich descriptions and insights
     """
-    lines = ["## Local Psychological Profile\n"]
+    lines = ["# 🧠 Comprehensive Psychological Profile\n"]
+    lines.append("*An in-depth analysis of communication patterns, emotional intelligence, and personality traits*")
+    lines.append("\n---\n")
 
-    # Average reciprocity
+    # ========== PERSONALITY OVERVIEW SECTION ==========
+    lines.append("## 📊 Personality Overview")
+    lines.append("")
+
+    personality = results.get("big_five_aggregation", {})
+    mbti_dist = results.get("basic_metrics", {}).get("mbti_distribution", {})
+    
+    # Big Five Traits Analysis
+    if personality:
+        lines.append("### The Big Five Personality Dimensions")
+        lines.append("")
+        
+        traits_info = {
+            "openness": {
+                "name": "Openness to Experience",
+                "high": "This indicates a strong appreciation for art, emotion, adventure, and unusual ideas. You're intellectually curious, creative, and open to new experiences.",
+                "moderate": "You balance tradition with novelty, showing practical creativity and selective openness to new experiences.",
+                "low": "You tend to prefer familiar routines and conventional approaches, valuing practicality over novelty."
+            },
+            "conscientiousness": {
+                "name": "Conscientiousness",
+                "high": "You demonstrate exceptional organization, dependability, and self-discipline. Goal-oriented behavior and strong planning skills are evident.",
+                "moderate": "You show a balanced approach to organization and spontaneity, being reliable while remaining flexible.",
+                "low": "You tend toward spontaneity and flexibility, preferring to go with the flow rather than strict planning."
+            },
+            "extraversion": {
+                "name": "Extraversion",
+                "high": "You're highly sociable and energetic, thriving in social interactions and seeking out engagement with others.",
+                "moderate": "You display ambivert qualities, comfortable in both social and solitary settings depending on the context.",
+                "low": "You prefer quieter, more introspective settings and recharge through solitude rather than social interaction."
+            },
+            "agreeableness": {
+                "name": "Agreeableness",
+                "high": "You show strong empathy, cooperation, and concern for harmony in relationships. Compassion and kindness are your strengths.",
+                "moderate": "You balance assertiveness with cooperation, maintaining healthy boundaries while being considerate of others.",
+                "low": "You tend to be more analytical and direct in communication, prioritizing truth and logic over social harmony."
+            },
+            "neuroticism": {
+                "name": "Emotional Stability",
+                "high": "You experience emotions intensely and may be more sensitive to stress. This emotional depth can fuel creativity and empathy.",
+                "moderate": "You maintain generally stable emotions with occasional sensitivity to stressors, showing healthy emotional responsiveness.",
+                "low": "You demonstrate remarkable emotional resilience and stability, remaining calm under pressure."
+            }
+        }
+        
+        # Get all trait scores and sort them
+        trait_scores = []
+        for trait in ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"]:
+            trait_data = personality.get(trait, {})
+            if trait_data:
+                mean_score = trait_data.get("mean", 5.0)
+                trait_scores.append((trait, mean_score))
+        
+        # Sort by score (highest first)
+        trait_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # Display traits in order of prominence
+        for trait, score in trait_scores:
+            trait_info = traits_info.get(trait, {})
+            trait_name = trait_info.get("name", trait.title())
+            
+            # Determine interpretation based on score
+            if score >= 7.0:
+                interpretation = trait_info.get("high", "")
+                level = "High"
+                emoji = "🔴"
+            elif score >= 4.0:
+                interpretation = trait_info.get("moderate", "")
+                level = "Moderate"
+                emoji = "🟡"
+            else:
+                interpretation = trait_info.get("low", "")
+                level = "Low"
+                emoji = "🟢"
+            
+            # Create visual bar
+            bar_length = int(score)
+            bar = "█" * bar_length + "░" * (10 - bar_length)
+            
+            lines.append(f"**{emoji} {trait_name}** — {level} ({score:.1f}/10)")
+            lines.append(f"`{bar}`")
+            lines.append(f"*{interpretation}*")
+            lines.append("")
+    
+    # MBTI Type Analysis
+    if mbti_dist:
+        lines.append("### Myers-Briggs Type Indicator (MBTI)")
+        lines.append("")
+        top_mbti = max(mbti_dist.items(), key=lambda x: x[1])[0] if mbti_dist else "XXXX"
+        
+        mbti_descriptions = {
+            "INTJ": "The Architect - Strategic, analytical, and independent thinker",
+            "INTP": "The Logician - Innovative, philosophical, and curious problem-solver",
+            "ENTJ": "The Commander - Bold, decisive, and strategic leader",
+            "ENTP": "The Debater - Quick-witted, resourceful, and intellectually curious",
+            "INFJ": "The Advocate - Idealistic, empathetic, and purpose-driven",
+            "INFP": "The Mediator - Poetic, creative, and values-driven",
+            "ENFJ": "The Protagonist - Charismatic, inspiring, and natural leader",
+            "ENFP": "The Campaigner - Enthusiastic, creative, and sociable free spirit",
+            "ISTJ": "The Logistician - Practical, fact-minded, and reliable",
+            "ISFJ": "The Defender - Dedicated, warm, and protector of traditions",
+            "ESTJ": "The Executive - Organized, practical, and efficient administrator",
+            "ESFJ": "The Consul - Caring, social, and community-minded",
+            "ISTP": "The Virtuoso - Bold, practical, and experimental problem-solver",
+            "ISFP": "The Adventurer - Flexible, charming, and artistic explorer",
+            "ESTP": "The Entrepreneur - Energetic, perceptive, and action-oriented",
+            "ESFP": "The Entertainer - Spontaneous, enthusiastic, and outgoing performer"
+        }
+        
+        description = mbti_descriptions.get(top_mbti, "Unique personality pattern")
+        count = mbti_dist.get(top_mbti, 0)
+        total = sum(mbti_dist.values())
+        percentage = (count / total * 100) if total > 0 else 0
+        
+        lines.append(f"**Primary Type: {top_mbti}**")
+        lines.append(f"*{description}*")
+        lines.append(f"Observed in {percentage:.0f}% of conversations ({count} of {total})")
+        lines.append("")
+    
+    lines.append("---\n")
+
+    # ========== EMOTIONAL INTELLIGENCE SECTION ==========
+    lines.append("## 💝 Emotional Intelligence & Communication Dynamics")
+    lines.append("")
+
+    # Emotional Reciprocity Analysis
     recip = results.get("basic_metrics", {}).get("average_emotional_reciprocity", {})
     if recip:
         mean_recip = recip.get("mean", 0.5)
-        lines.append(
-            f"• **Emotional Reciprocity**: {mean_recip:.2f}/1.0 - "
-            f"{'High mutual emotional engagement' if mean_recip > 0.6 else 'Moderate emotional exchange' if mean_recip > 0.4 else 'Limited emotional reciprocity'}"
-        )
+        std_recip = recip.get("std", 0.0)
+        n_recip = recip.get("n", 0)
+        
+        lines.append("### Emotional Reciprocity")
+        
+        # Visual representation
+        recip_percentage = int(mean_recip * 100)
+        recip_bar = "█" * (recip_percentage // 10) + "░" * (10 - recip_percentage // 10)
+        lines.append(f"`{recip_bar}` **{mean_recip:.2f}/1.0** ({recip_percentage}%)")
+        lines.append("")
+        
+        # Detailed interpretation
+        if mean_recip >= 0.75:
+            lines.append("**Exceptional Emotional Attunement** 🌟")
+            lines.append("Your conversations demonstrate outstanding mutual emotional engagement. You consistently match and respond to the emotional states of others, creating deeply connected and empathetic exchanges. This high reciprocity indicates:")
+            lines.append("- Strong emotional intelligence and awareness")
+            lines.append("- Ability to create safe spaces for emotional expression")
+            lines.append("- Natural capacity for empathy and validation")
+            lines.append("- Skilled at building and maintaining intimate connections")
+        elif mean_recip >= 0.60:
+            lines.append("**High Mutual Emotional Engagement** ✨")
+            lines.append("You maintain strong emotional connections in your conversations. There's a healthy give-and-take of emotional expression, showing that you're both receptive to others' feelings and willing to share your own. This reflects:")
+            lines.append("- Good emotional awareness and responsiveness")
+            lines.append("- Balanced approach to emotional sharing")
+            lines.append("- Ability to foster meaningful connections")
+            lines.append("- Comfortable with emotional vulnerability")
+        elif mean_recip >= 0.40:
+            lines.append("**Moderate Emotional Exchange** 💭")
+            lines.append("Your emotional reciprocity shows a balanced but somewhat reserved approach to emotional connection. While you engage emotionally, there may be selective sharing or varying comfort levels across different topics. Consider:")
+            lines.append("- Opportunities to deepen emotional connections")
+            lines.append("- Exploring comfort with vulnerability")
+            lines.append("- Recognizing when emotional support is needed")
+            lines.append("- Building trust for more open exchanges")
+        else:
+            lines.append("**Reserved Emotional Exchange** 🔒")
+            lines.append("Your conversations tend toward practical or intellectual content with limited emotional reciprocity. This might indicate:")
+            lines.append("- Preference for logical over emotional discourse")
+            lines.append("- Possible emotional guardedness or boundaries")
+            lines.append("- Opportunities for deeper emotional connection")
+            lines.append("- Consider if this pattern aligns with your relationship goals")
+        
+        if std_recip > 0.2:
+            lines.append(f"\n*Note: Reciprocity varies significantly across conversations (σ={std_recip:.2f}), suggesting context-dependent emotional engagement.*")
+        
+        lines.append("")
 
-    # Top dominant emotion
+    # Dominant Emotions Analysis
     emotion_insights = results.get("emotion_insights", {})
     most_common = emotion_insights.get("most_common_emotion", "neutral")
-    lines.append(
-        f"• **Dominant Emotion**: {most_common.title()} - "
-        f"Most frequently expressed emotional state"
-    )
+    avg_ratios = emotion_insights.get("average_emotion_ratios", {})
+    
+    lines.append("### Emotional Landscape")
+    lines.append("")
+    
+    emotion_emojis = {
+        "joy": "😊",
+        "happiness": "😊",
+        "sadness": "😢",
+        "anger": "😠",
+        "fear": "😰",
+        "surprise": "😲",
+        "disgust": "🤢",
+        "neutral": "😐",
+        "love": "❤️",
+        "gratitude": "🙏",
+        "excitement": "🎉",
+        "anxiety": "😰",
+        "pride": "😌",
+        "shame": "😔"
+    }
+    
+    lines.append(f"**Primary Emotional Tone: {emotion_emojis.get(most_common.lower(), '💭')} {most_common.title()}**")
+    lines.append("")
+    
+    # Show emotion distribution if available
+    if avg_ratios:
+        lines.append("**Emotional Distribution:**")
+        # Sort emotions by ratio
+        sorted_emotions = sorted(avg_ratios.items(), key=lambda x: x[1], reverse=True)
+        for emotion, ratio in sorted_emotions[:5]:  # Top 5 emotions
+            if ratio > 0.05:  # Only show emotions above 5%
+                emoji = emotion_emojis.get(emotion.lower(), "•")
+                percentage = ratio * 100
+                bar_len = int(percentage / 5)  # Scale for display
+                bar = "▓" * bar_len + "░" * (20 - bar_len)
+                lines.append(f"{emoji} {emotion.title()}: `{bar}` {percentage:.1f}%")
+        lines.append("")
+    
+    # Emotional complexity insight
+    if avg_ratios:
+        num_significant_emotions = sum(1 for ratio in avg_ratios.values() if ratio > 0.1)
+        if num_significant_emotions >= 4:
+            lines.append("*Your emotional expression is rich and diverse, showing emotional depth and complexity in your communications.*")
+        elif num_significant_emotions >= 2:
+            lines.append("*You express a balanced range of emotions, contributing to authentic and relatable interactions.*")
+        else:
+            lines.append("*Your emotional expression tends toward consistency and stability, with clear dominant themes.*")
+        lines.append("")
 
-    # Top personality trait
-    personality = results.get("big_five_aggregation", {})
-    top_trait = personality.get("top_trait")
-    if top_trait:
-        trait_data = personality.get(top_trait, {})
-        mean_score = trait_data.get("mean", 5.0)
-        lines.append(
-            f"• **Prominent Trait**: {top_trait.title()} (score: {mean_score:.1f}/10) - "
-            f"Most pronounced Big Five personality characteristic"
-        )
+    # Response Time Analysis
+    rt_stats = results.get("basic_metrics", {}).get("response_time_stats", {})
+    if rt_stats and rt_stats.get("n", 0) > 0:
+        mean_rt = rt_stats.get("mean", 0.0)
+        std_rt = rt_stats.get("std", 0.0)
+        
+        lines.append("### Communication Responsiveness")
+        lines.append("")
+        
+        # Convert to hours/minutes for better readability
+        if mean_rt < 60:
+            time_str = f"{mean_rt:.0f} minutes"
+        elif mean_rt < 1440:  # Less than 24 hours
+            hours = mean_rt / 60
+            time_str = f"{hours:.1f} hours"
+        else:
+            days = mean_rt / 1440
+            time_str = f"{days:.1f} days"
+        
+        lines.append(f"**Average Response Time: {time_str}**")
+        lines.append("")
+        
+        if mean_rt < 15:
+            lines.append("**Highly Responsive** ⚡")
+            lines.append("You respond almost immediately to messages, indicating high availability and prioritization of communication. This shows:")
+            lines.append("- Strong engagement and attentiveness")
+            lines.append("- Immediate accessibility to conversation partners")
+            lines.append("- Possible real-time conversation flow")
+        elif mean_rt < 60:
+            lines.append("**Quick Engagement** 🚀")
+            lines.append("Your response times are impressively quick, showing good availability and interest in maintaining active conversations.")
+        elif mean_rt < 180:
+            lines.append("**Moderate Pace** ⏱️")
+            lines.append("You maintain a balanced response pattern, allowing time for thoughtful replies while staying engaged.")
+        elif mean_rt < 1440:
+            lines.append("**Thoughtful Responses** 🤔")
+            lines.append("Your measured response times suggest careful consideration and may reflect a busy schedule or preference for asynchronous communication.")
+        else:
+            lines.append("**Delayed Communication** 📅")
+            lines.append("Extended response times may indicate competing priorities or preference for less frequent, more substantial exchanges.")
+        
+        if std_rt > mean_rt * 0.5:
+            lines.append(f"\n*Response times vary considerably (σ={std_rt:.1f}), suggesting different availability or engagement levels across contexts.*")
+        
+        lines.append("")
 
-    # MBTI distribution
-    mbti_dist = results.get("basic_metrics", {}).get("mbti_distribution", {})
-    if mbti_dist:
-        top_mbti = max(mbti_dist.items(), key=lambda x: x[1])[0] if mbti_dist else "XXXX"
-        lines.append(
-            f"• **MBTI Pattern**: {top_mbti} - " f"Most common personality type in conversations"
-        )
+    lines.append("---\n")
 
+    # ========== CONVERSATION PATTERNS SECTION ==========
+    highlights = results.get("highlights_and_rankings", {})
+    if highlights:
+        lines.append("## 🎯 Conversation Patterns & Topic Analysis")
+        lines.append("")
+        
+        # Topic-based reciprocity
+        recip_ranking = highlights.get("reciprocity_ranking", {})
+        top_topics = recip_ranking.get("top_topics", [])
+        low_topics = recip_ranking.get("lowest_topics", [])
+        
+        if top_topics:
+            lines.append("### Topics with Strongest Emotional Connection")
+            lines.append("")
+            for i, (topic, recip_score, n) in enumerate(top_topics[:3], 1):
+                lines.append(f"{i}. **{topic.title()}** ({recip_score:.2f}) — {n} conversation{'s' if n > 1 else ''}")
+                if recip_score >= 0.8:
+                    lines.append(f"   *This topic elicits deep, authentic emotional sharing and mutual understanding.*")
+                else:
+                    lines.append(f"   *Strong emotional engagement and reciprocal communication patterns observed.*")
+            lines.append("")
+        
+        if low_topics and low_topics[0][1] < 0.6:  # Only show if actually low
+            lines.append("### Topics with Growth Opportunities")
+            lines.append("")
+            for topic, recip_score, n in low_topics[:2]:
+                lines.append(f"• **{topic.title()}** ({recip_score:.2f}) — {n} conversation{'s' if n > 1 else ''}")
+                lines.append(f"   *Consider exploring emotional dimensions of this topic for deeper connection.*")
+            lines.append("")
+        
+        # Response speed by topic
+        rt_ranking = highlights.get("response_time_ranking", {})
+        fastest_topics = rt_ranking.get("fastest_topics", [])
+        slowest_topics = rt_ranking.get("slowest_topics", [])
+        
+        if fastest_topics:
+            lines.append("### High-Priority Topics (Fastest Responses)")
+            lines.append("")
+            for topic, rt_minutes, n in fastest_topics[:3]:
+                if rt_minutes < 60:
+                    time_str = f"{rt_minutes:.0f} min"
+                else:
+                    time_str = f"{rt_minutes/60:.1f} hrs"
+                lines.append(f"• **{topic.title()}** — {time_str} average response")
+            lines.append("")
+            lines.append("*These topics appear to capture your immediate attention and engagement.*")
+            lines.append("")
+        
+        # Emotional highlights
+        emotional_hl = highlights.get("emotional_highlights", {})
+        gratitude_topics = emotional_hl.get("high_gratitude_topics", [])
+        sadness_topics = emotional_hl.get("high_sadness_topics", [])
+        
+        if gratitude_topics:
+            lines.append(f"### Expressions of Appreciation 🙏")
+            lines.append(f"*Strong gratitude detected in: {', '.join(t.title() for t in gratitude_topics[:3])}*")
+            lines.append("")
+        
+        if sadness_topics:
+            lines.append(f"### Emotional Vulnerability Noted 💙")
+            lines.append(f"*Sadness or concern expressed in: {', '.join(t.title() for t in sadness_topics[:3])}*")
+            lines.append("*These moments of vulnerability can deepen relationships when met with empathy.*")
+            lines.append("")
+        
+        lines.append("---\n")
+
+    # ========== INSIGHTS & RECOMMENDATIONS SECTION ==========
+    lines.append("## 💡 Key Insights & Recommendations")
+    lines.append("")
+    
     # Flagged conversations
     flagged = emotion_insights.get("flagged_conversations", [])
     if flagged:
         low_recip_count = sum(1 for f in flagged if f.get("reason") == "low_reciprocity")
+        high_sadness_count = sum(1 for f in flagged if f.get("reason") == "high_sadness")
+        
         if low_recip_count > 0:
-            lines.append(
-                f"• **Attention Needed**: {low_recip_count} conversation(s) with low emotional reciprocity detected"
-            )
-
-    # Response time
-    rt_stats = results.get("basic_metrics", {}).get("response_time_stats", {})
-    if rt_stats and rt_stats.get("n", 0) > 0:
-        mean_rt = rt_stats.get("mean", 0.0)
-        lines.append(
-            f"• **Response Pattern**: Average response time of {mean_rt:.1f} minutes - "
-            f"{'Quick engagement' if mean_rt < 30 else 'Moderate pace' if mean_rt < 120 else 'Delayed responses'}"
-        )
-
-    # Add highlights and rankings summary if available
-    highlights = results.get("highlights_and_rankings", {})
-    if highlights:
-        # Top reciprocity topic
-        recip_ranking = highlights.get("reciprocity_ranking", {})
-        top_topics = recip_ranking.get("top_topics", [])
-        if top_topics:
-            top_topic, top_recip, n = top_topics[0]
-            lines.append(
-                f"• **Top Reciprocal Topic**: {top_topic.title()} ({top_recip:.2f}) - "
-                f"Highest emotional reciprocity across {n} conversations"
-            )
-
-        # Add overall emotional highlights
-        emotional_hl = highlights.get("emotional_highlights", {})
-        dom_emotions = emotional_hl.get("dominant_emotion_percentages", {})
-        if dom_emotions:
-            top_emotion = max(dom_emotions.items(), key=lambda x: x[1])
-            lines.append(
-                f"• **Emotional Pattern**: {top_emotion[0].title()} is most prevalent ({top_emotion[1]:.0f}% of conversations)"
-            )
+            lines.append(f"⚠️ **Attention Areas:** {low_recip_count} conversation{'s' if low_recip_count > 1 else ''} showed lower-than-usual emotional reciprocity.")
+            lines.append("   *Consider reaching out to strengthen these connections or reassess relationship dynamics.*")
+            lines.append("")
+        
+        if high_sadness_count > 0:
+            lines.append(f"💙 **Emotional Support Opportunity:** {high_sadness_count} conversation{'s' if high_sadness_count > 1 else ''} contained elevated sadness.")
+            lines.append("   *These may benefit from additional empathy, check-ins, or supportive follow-up.*")
+            lines.append("")
+    
+    # Generate overall synthesis
+    lines.append("### Overall Communication Profile")
+    lines.append("")
+    
+    # Synthesize personality and communication style
+    if personality:
+        top_trait = personality.get("top_trait", "")
+        if top_trait == "extraversion":
+            lines.append("Your **socially energized** communication style, combined with emotional awareness, suggests you thrive in dynamic, interactive conversations and bring enthusiasm to your relationships.")
+        elif top_trait == "agreeableness":
+            lines.append("Your **harmony-focused** approach, characterized by empathy and cooperation, makes you a natural relationship builder who prioritizes others' feelings and collective wellbeing.")
+        elif top_trait == "conscientiousness":
+            lines.append("Your **structured and reliable** communication pattern reflects thoughtfulness and dependability, making you a trustworthy and consistent conversation partner.")
+        elif top_trait == "openness":
+            lines.append("Your **intellectually curious** style brings creativity and depth to conversations, showing willingness to explore new ideas and emotional territories.")
+        elif top_trait == "neuroticism":
+            lines.append("Your **emotionally rich** communication reveals depth of feeling and sensitivity, which can foster profound connections when paired with emotional regulation strategies.")
+    
+    lines.append("")
+    
+    # Conversation count context
+    n_conversations = results.get("basic_metrics", {}).get("per_conversation_count", 0)
+    if n_conversations > 0:
+        lines.append(f"*This analysis is based on {n_conversations} conversation{'s' if n_conversations != 1 else ''}, providing a comprehensive view of your communication patterns and relational dynamics.*")
+    
+    lines.append("\n---\n")
+    lines.append("*Generated using local deterministic analysis • Privacy-preserving • No external AI calls*")
 
     return "\n".join(lines)
