@@ -972,14 +972,16 @@ def highlights_and_rankings(
     logger.debug("Step 8.5: highlights_and_rankings")
 
     # Normalize topics and aggregate by topic
-    topic_aggregation = defaultdict(lambda: {
-        "conversations": [],
-        "reciprocity_values": [],
-        "response_time_values": [],
-        "emotion_counts": Counter(),
-        "emotion_ratio_sums": defaultdict(float),
-        "n": 0,
-    })
+    topic_aggregation = defaultdict(
+        lambda: {
+            "conversations": [],
+            "reciprocity_values": [],
+            "response_time_values": [],
+            "emotion_counts": Counter(),
+            "emotion_ratio_sums": defaultdict(float),
+            "n": 0,
+        }
+    )
 
     # Extract data from records
     if HAS_PANDAS and isinstance(records, pd.DataFrame):
@@ -1005,7 +1007,9 @@ def highlights_and_rankings(
             agg = topic_aggregation[topic]
             agg["conversations"].append(str(record.get("conversation_id", "")))
             agg["reciprocity_values"].append(float(record.get("emotional_reciprocity", 0.5)))
-            agg["response_time_values"].append(float(record.get("response_time_topic_average", 0.0)))
+            agg["response_time_values"].append(
+                float(record.get("response_time_topic_average", 0.0))
+            )
             agg["emotion_counts"][str(record.get("dominant_emotion", "neutral"))] += 1
             agg["n"] += 1
 
@@ -1031,12 +1035,13 @@ def highlights_and_rankings(
         median_response_time = sorted(rt_values)[len(rt_values) // 2] if rt_values else 0.0
 
         # Most common emotion
-        most_common_emotion = agg["emotion_counts"].most_common(1)[0][0] if agg["emotion_counts"] else "neutral"
+        most_common_emotion = (
+            agg["emotion_counts"].most_common(1)[0][0] if agg["emotion_counts"] else "neutral"
+        )
 
         # Average emotion ratios
         avg_emotion_ratios = {
-            emotion: total / n
-            for emotion, total in agg["emotion_ratio_sums"].items()
+            emotion: total / n for emotion, total in agg["emotion_ratio_sums"].items()
         }
 
         topics_aggregated[topic] = {
@@ -1051,9 +1056,7 @@ def highlights_and_rankings(
 
     # Ranking: Emotional Reciprocity (descending)
     reciprocity_ranked = sorted(
-        topics_aggregated.items(),
-        key=lambda x: x[1]["mean_emotional_reciprocity"],
-        reverse=True
+        topics_aggregated.items(), key=lambda x: x[1]["mean_emotional_reciprocity"], reverse=True
     )
 
     top_reciprocity = []
@@ -1070,7 +1073,7 @@ def highlights_and_rankings(
     # Ranking: Response Time (ascending - faster is better)
     response_time_ranked = sorted(
         [(t, s) for t, s in topics_aggregated.items() if s["mean_response_time_minutes"] > 0],
-        key=lambda x: x[1]["mean_response_time_minutes"]
+        key=lambda x: x[1]["mean_response_time_minutes"],
     )
 
     fastest_topics = []
@@ -1105,15 +1108,23 @@ def highlights_and_rankings(
 
     # Find topics with highest gratitude/sadness
     gratitude_topics = sorted(
-        [(t, s) for t, s in topics_aggregated.items() if s["avg_emotion_ratios"].get("gratitude", 0) > 0],
+        [
+            (t, s)
+            for t, s in topics_aggregated.items()
+            if s["avg_emotion_ratios"].get("gratitude", 0) > 0
+        ],
         key=lambda x: x[1]["avg_emotion_ratios"].get("gratitude", 0),
-        reverse=True
+        reverse=True,
     )[:3]
 
     sadness_topics = sorted(
-        [(t, s) for t, s in topics_aggregated.items() if s["avg_emotion_ratios"].get("sadness", 0) > 0],
+        [
+            (t, s)
+            for t, s in topics_aggregated.items()
+            if s["avg_emotion_ratios"].get("sadness", 0) > 0
+        ],
         key=lambda x: x[1]["avg_emotion_ratios"].get("sadness", 0),
-        reverse=True
+        reverse=True,
     )[:3]
 
     # Generate combined summary text block
@@ -1121,8 +1132,11 @@ def highlights_and_rankings(
     summary_lines.append("🔹 Emotional Reciprocity Ranking:")
 
     # Top reciprocity (limit to 3)
-    top_3_recip = (top_reciprocity[:3] if top_reciprocity else
-                   [item for item in reciprocity_ranked if item[1]["n"] >= min_topic_n][:3])
+    top_3_recip = (
+        top_reciprocity[:3]
+        if top_reciprocity
+        else [item for item in reciprocity_ranked if item[1]["n"] >= min_topic_n][:3]
+    )
 
     for i, (topic, stats) in enumerate(top_3_recip, 1):
         summary_lines.append(
@@ -1175,12 +1189,29 @@ def highlights_and_rankings(
     final_insight = ""
     if include_final_insight:
         # Generate a simple interpretive insight
-        avg_reciprocity = sum(s["mean_emotional_reciprocity"] for s in topics_aggregated.values()) / len(topics_aggregated) if topics_aggregated else 0.5
-        avg_response = sum(s["mean_response_time_minutes"] for s in topics_aggregated.values() if s["mean_response_time_minutes"] > 0) / max(1, len([s for s in topics_aggregated.values() if s["mean_response_time_minutes"] > 0]))
+        avg_reciprocity = (
+            sum(s["mean_emotional_reciprocity"] for s in topics_aggregated.values())
+            / len(topics_aggregated)
+            if topics_aggregated
+            else 0.5
+        )
+        avg_response = sum(
+            s["mean_response_time_minutes"]
+            for s in topics_aggregated.values()
+            if s["mean_response_time_minutes"] > 0
+        ) / max(
+            1, len([s for s in topics_aggregated.values() if s["mean_response_time_minutes"] > 0])
+        )
 
-        reciprocity_desc = "highly" if avg_reciprocity > 0.7 else "moderately" if avg_reciprocity > 0.5 else "somewhat"
+        reciprocity_desc = (
+            "highly"
+            if avg_reciprocity > 0.7
+            else "moderately" if avg_reciprocity > 0.5 else "somewhat"
+        )
         emotion_desc = dominant_emotion[0] if emotion_percentages else "neutral"
-        response_desc = "quick" if avg_response < 60 else "moderate" if avg_response < 180 else "delayed"
+        response_desc = (
+            "quick" if avg_response < 60 else "moderate" if avg_response < 180 else "delayed"
+        )
 
         final_insight = (
             f"\nFinal Insight:\n"
@@ -1197,11 +1228,17 @@ def highlights_and_rankings(
         "topics_aggregated": topics_aggregated,
         "reciprocity_ranking": {
             "top_topics": [(t, s["mean_emotional_reciprocity"], s["n"]) for t, s in top_3_recip],
-            "lowest_topics": [(t, s["mean_emotional_reciprocity"], s["n"]) for t, s in low_reciprocity[:3]],
+            "lowest_topics": [
+                (t, s["mean_emotional_reciprocity"], s["n"]) for t, s in low_reciprocity[:3]
+            ],
         },
         "response_time_ranking": {
-            "fastest_topics": [(t, s["mean_response_time_minutes"], s["n"]) for t, s in fastest_topics],
-            "slowest_topics": [(t, s["mean_response_time_minutes"], s["n"]) for t, s in slowest_topics],
+            "fastest_topics": [
+                (t, s["mean_response_time_minutes"], s["n"]) for t, s in fastest_topics
+            ],
+            "slowest_topics": [
+                (t, s["mean_response_time_minutes"], s["n"]) for t, s in slowest_topics
+            ],
         },
         "emotional_highlights": {
             "dominant_emotion_percentages": emotion_percentages,
@@ -1212,9 +1249,7 @@ def highlights_and_rankings(
         "final_insight": final_insight if include_final_insight else None,
     }
 
-    logger.debug(
-        f"Generated highlights and rankings for {len(topics_aggregated)} topics"
-    )
+    logger.debug(f"Generated highlights and rankings for {len(topics_aggregated)} topics")
     return result
 
 

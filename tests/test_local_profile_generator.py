@@ -465,6 +465,7 @@ class TestLocalProfileGenerator(unittest.TestCase):
         # Convert to list if it's a DataFrame
         try:
             import pandas as pd
+
             if isinstance(cleaned, pd.DataFrame):
                 cleaned = cleaned.to_dict("records")
         except ImportError:
@@ -486,10 +487,7 @@ class TestLocalProfileGenerator(unittest.TestCase):
 
         # Run with custom thresholds
         highlights = highlights_and_rankings(
-            cleaned,
-            min_topic_n=1,
-            reciprocity_thresholds=(0.8, 0.6),
-            include_final_insight=False
+            cleaned, min_topic_n=1, reciprocity_thresholds=(0.8, 0.6), include_final_insight=False
         )
 
         # Check that final insight is None when disabled
@@ -509,8 +507,13 @@ class TestLocalProfileGenerator(unittest.TestCase):
                 "topic": ["danke"],
                 "emojies": ["😊"],
                 "sentiment": ["positive"],
-                "big_five": {"openness": 7.0, "conscientiousness": 7.0, "extraversion": 8.0,
-                            "agreeableness": 7.5, "neuroticism": 3.0},
+                "big_five": {
+                    "openness": 7.0,
+                    "conscientiousness": 7.0,
+                    "extraversion": 8.0,
+                    "agreeableness": 7.5,
+                    "neuroticism": 3.0,
+                },
                 "mbti": "ENFJ",
                 "emotion_analysis": {
                     "dominant_emotion": "gratitude",
@@ -525,8 +528,13 @@ class TestLocalProfileGenerator(unittest.TestCase):
                 "topic": ["danke"],
                 "emojies": ["😊"],
                 "sentiment": ["positive"],
-                "big_five": {"openness": 7.0, "conscientiousness": 7.0, "extraversion": 8.0,
-                            "agreeableness": 7.5, "neuroticism": 3.0},
+                "big_five": {
+                    "openness": 7.0,
+                    "conscientiousness": 7.0,
+                    "extraversion": 8.0,
+                    "agreeableness": 7.5,
+                    "neuroticism": 3.0,
+                },
                 "mbti": "ENFJ",
                 "emotion_analysis": {
                     "dominant_emotion": "gratitude",
@@ -541,8 +549,13 @@ class TestLocalProfileGenerator(unittest.TestCase):
                 "topic": ["error"],
                 "emojies": [],
                 "sentiment": ["negative"],
-                "big_five": {"openness": 5.0, "conscientiousness": 5.0, "extraversion": 4.0,
-                            "agreeableness": 5.0, "neuroticism": 6.0},
+                "big_five": {
+                    "openness": 5.0,
+                    "conscientiousness": 5.0,
+                    "extraversion": 4.0,
+                    "agreeableness": 5.0,
+                    "neuroticism": 6.0,
+                },
                 "mbti": "ISTJ",
                 "emotion_analysis": {
                     "dominant_emotion": "sadness",
