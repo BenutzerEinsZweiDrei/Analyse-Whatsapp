@@ -7,7 +7,7 @@ comprehensive personality profile summary.
 """
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 import streamlit as st
@@ -160,7 +160,7 @@ def create_merged_json(big_five_df, emotions_df, mbti_df):
         "basic_metrics": {"dominant_emotion_counts": {}},
         "mbti_summary": {},
         "metadata": {
-            "merged_at": datetime.now().isoformat(),
+            "merged_at": datetime.now(timezone.utc).isoformat(),
             "merger_version": "1.0",
         },
     }
@@ -317,7 +317,7 @@ def main():
     st.subheader("💾 Download Merged Profile")
 
     merged_json = create_merged_json(big_five_df, emotions_df, mbti_df)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     filename = f"merged_personality_{timestamp}.json"
 
     st.download_button(
