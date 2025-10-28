@@ -19,6 +19,7 @@ from local_profile_generator import (
     emotion_insights,
     export_results,
     filter_and_segment,
+    highlights_and_rankings,
     load_and_validate,
     normalize_structure,
     run_local_analysis,
@@ -397,6 +398,199 @@ class TestLocalProfileGenerator(unittest.TestCase):
 
         # Check that exports are included
         self.assertIn("exports", results)
+
+        # Check that highlights_and_rankings is included
+        self.assertIn("highlights_and_rankings", results)
+
+    def test_highlights_and_rankings_basic(self):
+        """Test highlights_and_rankings function with basic data."""
+        _, matrix = load_and_validate(self.test_summary, self.test_matrix)
+        records = normalize_structure(matrix)
+        cleaned = clean_data(records)
+
+        # Run highlights and rankings
+        highlights = highlights_and_rankings(cleaned)
+
+        # Check that all required keys are present
+        self.assertIsInstance(highlights, dict)
+        self.assertIn("topics_aggregated", highlights)
+        self.assertIn("reciprocity_ranking", highlights)
+        self.assertIn("response_time_ranking", highlights)
+        self.assertIn("emotional_highlights", highlights)
+        self.assertIn("summary_text", highlights)
+        self.assertIn("final_insight", highlights)
+
+        # Check topics_aggregated structure
+        topics = highlights["topics_aggregated"]
+        self.assertGreater(len(topics), 0)
+
+        # Check that each topic has required fields
+        for topic, stats in topics.items():
+            self.assertIn("n", stats)
+            self.assertIn("mean_emotional_reciprocity", stats)
+            self.assertIn("mean_response_time_minutes", stats)
+            self.assertIn("median_response_time_minutes", stats)
+            self.assertIn("dominant_emotion", stats)
+
+        # Check reciprocity ranking structure
+        recip_rank = highlights["reciprocity_ranking"]
+        self.assertIn("top_topics", recip_rank)
+        self.assertIn("lowest_topics", recip_rank)
+
+        # Check response time ranking structure
+        rt_rank = highlights["response_time_ranking"]
+        self.assertIn("fastest_topics", rt_rank)
+        self.assertIn("slowest_topics", rt_rank)
+
+        # Check emotional highlights structure
+        emo_hl = highlights["emotional_highlights"]
+        self.assertIn("dominant_emotion_percentages", emo_hl)
+        self.assertIn("high_gratitude_topics", emo_hl)
+        self.assertIn("high_sadness_topics", emo_hl)
+
+        # Check summary text
+        summary = highlights["summary_text"]
+        self.assertIsInstance(summary, str)
+        self.assertGreater(len(summary), 0)
+        self.assertIn("Emotional Reciprocity Ranking", summary)
+        self.assertIn("Response Speed Ranking", summary)
+        self.assertIn("Emotional Highlights", summary)
+
+    def test_highlights_and_rankings_with_list(self):
+        """Test highlights_and_rankings with list of dicts instead of DataFrame."""
+        _, matrix = load_and_validate(self.test_summary, self.test_matrix)
+        records = normalize_structure(matrix)
+        cleaned = clean_data(records)
+
+        # Convert to list if it's a DataFrame
+        try:
+            import pandas as pd
+            if isinstance(cleaned, pd.DataFrame):
+                cleaned = cleaned.to_dict("records")
+        except ImportError:
+            pass
+
+        # Run highlights and rankings
+        highlights = highlights_and_rankings(cleaned)
+
+        # Basic checks
+        self.assertIsInstance(highlights, dict)
+        self.assertIn("topics_aggregated", highlights)
+        self.assertIn("summary_text", highlights)
+
+    def test_highlights_and_rankings_with_thresholds(self):
+        """Test highlights_and_rankings with custom thresholds."""
+        _, matrix = load_and_validate(self.test_summary, self.test_matrix)
+        records = normalize_structure(matrix)
+        cleaned = clean_data(records)
+
+        # Run with custom thresholds
+        highlights = highlights_and_rankings(
+            cleaned,
+            min_topic_n=1,
+            reciprocity_thresholds=(0.8, 0.6),
+            include_final_insight=False
+        )
+
+        # Check that final insight is None when disabled
+        self.assertIsNone(highlights["final_insight"])
+
+        # Check that min_topic_n is respected
+        topics = highlights["topics_aggregated"]
+        for topic, stats in topics.items():
+            self.assertGreaterEqual(stats["n"], 1)
+
+    def test_highlights_and_rankings_topic_aggregation(self):
+        """Test that topics are properly aggregated and metrics computed."""
+        # Create test data with specific topics
+        test_matrix = {
+            "1": {
+                "conversation_id": "1",
+                "topic": ["danke"],
+                "emojies": ["😊"],
+                "sentiment": ["positive"],
+                "big_five": {"openness": 7.0, "conscientiousness": 7.0, "extraversion": 8.0,
+                            "agreeableness": 7.5, "neuroticism": 3.0},
+                "mbti": "ENFJ",
+                "emotion_analysis": {
+                    "dominant_emotion": "gratitude",
+                    "emotion_ratios": {"gratitude": 0.9, "joy": 0.1},
+                },
+                "emotional_reciprocity": 0.95,
+                "response_times": {"per_user": {"u1": 10}, "topic_average": 10.0},
+                "words": [],
+            },
+            "2": {
+                "conversation_id": "2",
+                "topic": ["danke"],
+                "emojies": ["😊"],
+                "sentiment": ["positive"],
+                "big_five": {"openness": 7.0, "conscientiousness": 7.0, "extraversion": 8.0,
+                            "agreeableness": 7.5, "neuroticism": 3.0},
+                "mbti": "ENFJ",
+                "emotion_analysis": {
+                    "dominant_emotion": "gratitude",
+                    "emotion_ratios": {"gratitude": 0.8, "joy": 0.2},
+                },
+                "emotional_reciprocity": 0.92,
+                "response_times": {"per_user": {"u1": 15}, "topic_average": 15.0},
+                "words": [],
+            },
+            "3": {
+                "conversation_id": "3",
+                "topic": ["error"],
+                "emojies": [],
+                "sentiment": ["negative"],
+                "big_five": {"openness": 5.0, "conscientiousness": 5.0, "extraversion": 4.0,
+                            "agreeableness": 5.0, "neuroticism": 6.0},
+                "mbti": "ISTJ",
+                "emotion_analysis": {
+                    "dominant_emotion": "sadness",
+                    "emotion_ratios": {"sadness": 0.7, "neutral": 0.3},
+                },
+                "emotional_reciprocity": 0.70,
+                "response_times": {"per_user": {"u1": 120}, "topic_average": 120.0},
+                "words": [],
+            },
+        }
+
+        test_summary = {
+            "positive_topics": ["danke"],
+            "negative_topics": ["error"],
+            "emotion_variability": 0.2,
+            "analysis": {},
+        }
+
+        summary, matrix = load_and_validate(test_summary, test_matrix)
+        records = normalize_structure(matrix)
+        cleaned = clean_data(records)
+
+        highlights = highlights_and_rankings(cleaned, min_topic_n=1)
+
+        # Check topic aggregation
+        topics = highlights["topics_aggregated"]
+        self.assertIn("danke", topics)
+        self.assertIn("error", topics)
+
+        # Check danke topic stats (should have 2 conversations)
+        danke_stats = topics["danke"]
+        self.assertEqual(danke_stats["n"], 2)
+        # Mean reciprocity should be (0.95 + 0.92) / 2 = 0.935
+        self.assertAlmostEqual(danke_stats["mean_emotional_reciprocity"], 0.935, places=2)
+        # Mean response time should be (10 + 15) / 2 = 12.5
+        self.assertAlmostEqual(danke_stats["mean_response_time_minutes"], 12.5, places=1)
+
+        # Check error topic stats (should have 1 conversation)
+        error_stats = topics["error"]
+        self.assertEqual(error_stats["n"], 1)
+        self.assertEqual(error_stats["mean_emotional_reciprocity"], 0.70)
+        self.assertEqual(error_stats["mean_response_time_minutes"], 120.0)
+
+        # Check rankings
+        recip_rank = highlights["reciprocity_ranking"]
+        top_topics = recip_rank["top_topics"]
+        # Danke should be first
+        self.assertEqual(top_topics[0][0], "danke")
 
     def test_safe_float(self):
         """Test safe_float helper function."""
