@@ -175,9 +175,30 @@ class TestLocalProfileGenerator(unittest.TestCase):
         _, matrix = load_and_validate(self.test_summary, self.test_matrix)
         records = normalize_structure(matrix)
         
-        # Check that we get records
-        self.assertIsInstance(records, (list, type(None)))
-        if isinstance(records, list):
+        # Check that we get records (can be DataFrame or list)
+        try:
+            import pandas as pd
+            is_dataframe = isinstance(records, pd.DataFrame)
+        except ImportError:
+            is_dataframe = False
+        
+        if is_dataframe:
+            self.assertEqual(len(records), 3)
+            
+            # Check columns exist
+            self.assertIn("conversation_id", records.columns)
+            self.assertIn("topic", records.columns)
+            self.assertIn("dominant_emotion", records.columns)
+            self.assertIn("emotional_reciprocity", records.columns)
+            self.assertIn("mbti", records.columns)
+            
+            # Check Big Five flattening
+            self.assertIn("big_five_openness", records.columns)
+            self.assertIn("big_five_conscientiousness", records.columns)
+            self.assertIn("big_five_extraversion", records.columns)
+            self.assertIn("big_five_agreeableness", records.columns)
+            self.assertIn("big_five_neuroticism", records.columns)
+        elif isinstance(records, list):
             self.assertEqual(len(records), 3)
             
             # Check first record structure
@@ -201,9 +222,20 @@ class TestLocalProfileGenerator(unittest.TestCase):
         records = normalize_structure(matrix)
         cleaned = clean_data(records)
         
-        # Check that we still have records
-        self.assertIsInstance(cleaned, (list, type(None)))
-        if isinstance(cleaned, list):
+        # Check that we still have records (can be DataFrame or list)
+        try:
+            import pandas as pd
+            is_dataframe = isinstance(cleaned, pd.DataFrame)
+        except ImportError:
+            is_dataframe = False
+        
+        if is_dataframe:
+            self.assertEqual(len(cleaned), 3)
+            
+            # Check that numeric columns exist and have proper types
+            self.assertIn("emotional_reciprocity", cleaned.columns)
+            self.assertIn("big_five_openness", cleaned.columns)
+        elif isinstance(cleaned, list):
             self.assertEqual(len(cleaned), 3)
             
             # Check that numeric fields are properly typed

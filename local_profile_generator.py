@@ -45,6 +45,37 @@ logger = logging.getLogger("whatsapp_analyzer.local_profile")
 
 
 # ---------------------------
+# JSON Encoder for numpy types
+# ---------------------------
+
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle numpy types."""
+    def default(self, obj):
+        if HAS_NUMPY:
+            if isinstance(obj, np.integer):
+                return int(obj)
+            elif isinstance(obj, np.floating):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+        return super().default(obj)
+
+
+def safe_json_dumps(data: Any, **kwargs) -> str:
+    """
+    Safely dump data to JSON, handling numpy types.
+    
+    Args:
+        data: Data to serialize
+        **kwargs: Additional arguments for json.dumps
+        
+    Returns:
+        JSON string
+    """
+    return json.dumps(data, cls=NumpyEncoder, **kwargs)
+
+
+# ---------------------------
 # Step 1: Load and Validate
 # ---------------------------
 
@@ -948,11 +979,12 @@ def export_results(results: Dict, records: Union['pd.DataFrame', List[Dict]]) ->
         "basic_metrics": results.get("basic_metrics", {}),
         "personality_aggregation": results.get("big_five_aggregation", {}),
         "correlations": results.get("correlations", {}),
-        "segments": results.get("segments", {}),
+        "topics_summary": results.get("topics_summary", {}),
+        "mbti_summary": results.get("mbti_summary", {}),
         "emotion_insights": results.get("emotion_insights", {}),
         "advanced_analysis": results.get("advanced_analysis", {})
     }
-    exports["metrics_json"] = json.dumps(metrics_data, ensure_ascii=False, indent=2)
+    exports["metrics_json"] = safe_json_dumps(metrics_data, ensure_ascii=False, indent=2)
     
     # Prepare per-conversation CSV
     if HAS_PANDAS and isinstance(records, pd.DataFrame):
@@ -983,7 +1015,7 @@ def export_results(results: Dict, records: Union['pd.DataFrame', List[Dict]]) ->
     
     # Prepare flagged conversations JSON
     flagged = results.get("emotion_insights", {}).get("flagged_conversations", [])
-    exports["flagged_json"] = json.dumps(flagged, ensure_ascii=False, indent=2)
+    exports["flagged_json"] = safe_json_dumps(flagged, ensure_ascii=False, indent=2)
     
     logger.debug("Export data prepared")
     return exports
