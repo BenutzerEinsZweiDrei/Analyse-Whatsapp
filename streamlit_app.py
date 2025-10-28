@@ -26,6 +26,7 @@ from nltk.stem import WordNetLemmatizer
 import string
 from gensim import corpora
 from gensim.models import LdaModel
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 # ---------------------------
 # Constants
@@ -415,6 +416,7 @@ def run_analysis(file_content, username):
     start_time = time.time()
     empath_lex = Empath()
     emot_obj = emot.core.emot()
+    vader_analyzer = SentimentIntensityAnalyzer()  # Initialize once outside the loop
     conversations = parse_conversations_from_text(file_content)
     logger.debug("run_analysis: parsed %d conversations", len(conversations))
     matrix = {}
@@ -455,14 +457,29 @@ def run_analysis(file_content, username):
             categories = list(matrix[idx]["lex"].keys())
             try:
                 t_call = time.time()
-                result = classify_texts(text, categories, api_key=jina_key)
-                logger.debug("Conversation #%d classify_texts took %.2fs", idx, time.time() - t_call)
-                sentiment_pred = result["data"][0]["prediction"]
-                matrix[idx]["sentiment"] = [sentiment_pred]
-                matrix[idx]["sent_rating"] = rate_text_from_file(sentiment_pred)
-                logger.debug("Conversation #%d sentiment=%s sent_rating=%s", idx, sentiment_pred, matrix[idx]["sent_rating"])
+                # Use vaderSentiment for sentiment analysis
+                vader_scores = vader_analyzer.polarity_scores(text)
+                compound_score = vader_scores['compound']
+                
+                # Convert compound score (-1 to 1) to 0-10 scale
+                sent_rating_value = round((compound_score + 1) * 5, 1)
+                
+                # Determine sentiment label based on compound score
+                if compound_score >= 0.05:
+                    sentiment_label = "positive"
+                elif compound_score <= -0.05:
+                    sentiment_label = "negative"
+                else:
+                    sentiment_label = "neutral"
+                
+                logger.debug("Conversation #%d vader analysis took %.2fs", idx, time.time() - t_call)
+                matrix[idx]["sentiment"] = [sentiment_label]
+                matrix[idx]["sent_rating"] = [sent_rating_value]
+                matrix[idx]["vader_scores"] = vader_scores  # Store detailed vader scores
+                logger.debug("Conversation #%d sentiment=%s sent_rating=%s compound=%s", 
+                           idx, sentiment_label, sent_rating_value, compound_score)
             except Exception:
-                logger.exception("Error classifying sentiment for conversation %d", idx)
+                logger.exception("Error analyzing sentiment for conversation %d", idx)
                 matrix[idx]["sentiment"] = ["error"]
                 matrix[idx]["sent_rating"] = []
 
@@ -527,7 +544,7 @@ def summarize_matrix(matrix):
 
         if topic and topic != ["no topic"]:
             if sent_rating:
-                if sent_rating[0] > 4:
+                if sent_rating[0] >= 5.0:
                     addtopic.append(topic)
                 else:
                     negtopic.append(topic)
