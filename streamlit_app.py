@@ -792,7 +792,7 @@ if st.button("Start Analysis"):
                 "metadata": {
                     "username": username.strip(),
                     "file_size_bytes": file_size,
-                    "total_conversations": len(matrix),
+                    "total_conversations": len(summary['matrix']),
                     "analysis_time_seconds": total_time
                 }
             }
@@ -853,7 +853,7 @@ if st.button("Start Analysis"):
                     mime="text/plain"
                 )
             else:
-                st.info("No logs available. Enable debug mode at the top to capture detailed logs.")
+                st.info("No logs available. Enable the 'Enable debug mode' checkbox above to capture detailed logs.")
     except Exception as main_e:
         logger.exception("Unhandled exception during analysis: %s", main_e)
         st.error(f"An unexpected error occurred: {main_e}")
