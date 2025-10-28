@@ -40,6 +40,7 @@ from conversation_metrics import (
     calculate_emotional_reciprocity,
     aggregate_topic_metrics
 )
+from local_profile_generator import run_local_analysis
 
 # ---------------------------
 # Constants
@@ -875,6 +876,81 @@ if st.session_state.analysis_done:
         mime="application/json",
         key="download_debug_info"
     )
+    
+    # Add button for local psychological profile generation
+    if st.button("Generate Local Psychological Profile", key="generate_local"):
+        # Note: This button is only visible when analysis_done is True
+        with st.spinner("Generating local profile..."):
+            try:
+                logger.info("Starting local profile generation")
+                
+                # Call the local analysis pipeline
+                results, profile_text = run_local_analysis(
+                    st.session_state.summary,
+                    st.session_state.matrix
+                )
+                
+                # Display the human-readable profile
+                st.markdown(profile_text)
+                
+                # Display structured results in an expander
+                with st.expander("View Detailed Analysis Results (JSON)", expanded=False):
+                    # Show key metrics sections
+                    st.json({
+                        "basic_metrics": results.get("basic_metrics", {}),
+                        "big_five_aggregation": results.get("big_five_aggregation", {}),
+                        "emotion_insights": results.get("emotion_insights", {}),
+                        "topics_summary": results.get("topics_summary", {}),
+                        "mbti_summary": results.get("mbti_summary", {})
+                    })
+                
+                # Provide download buttons
+                st.subheader("Download Results")
+                
+                # Download full JSON results
+                if "exports" in results and "metrics_json" in results["exports"]:
+                    st.download_button(
+                        label="📥 Download Complete Analysis (JSON)",
+                        data=results["exports"]["metrics_json"],
+                        file_name="analysis_local_results.json",
+                        mime="application/json",
+                        key="download_local_json"
+                    )
+                
+                # Download per-conversation CSV
+                if "exports" in results and "per_conversation_csv" in results["exports"]:
+                    st.download_button(
+                        label="📥 Download Per-Conversation Data (CSV)",
+                        data=results["exports"]["per_conversation_csv"],
+                        file_name="per_conversation.csv",
+                        mime="text/csv",
+                        key="download_local_csv"
+                    )
+                
+                # Download flagged conversations
+                if "exports" in results and "flagged_json" in results["exports"]:
+                    flagged_data = results["exports"]["flagged_json"]
+                    if flagged_data and flagged_data != "[]":
+                        st.download_button(
+                            label="📥 Download Flagged Conversations (JSON)",
+                            data=flagged_data,
+                            file_name="flagged_conversations.json",
+                            mime="application/json",
+                            key="download_flagged_json"
+                        )
+                
+                logger.info("Local profile generation completed successfully")
+                
+            except Exception as e:
+                logger.exception("Error generating local profile: %s", e)
+                st.error(
+                    f"⚠️ Local Profile Generation Failed\n\n"
+                    f"An error occurred while generating the local psychological profile:\n"
+                    f"{str(e)}\n\n"
+                    f"Please check the analysis data and try again."
+                )
+                if debug_mode:
+                    st.exception(e)
     
     # Add button to proceed with g4f analysis - read from session_state
     if st.button("Generate Psychological Profile with AI", key="generate_ai"):
