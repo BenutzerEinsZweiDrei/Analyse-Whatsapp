@@ -24,6 +24,8 @@ from nltk.tag import pos_tag
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 import string
+from gensim import corpora
+from gensim.models import LdaModel
 
 # ---------------------------
 # Debug / Logging Setup
@@ -176,10 +178,90 @@ def parse_conversations_from_text(text):
     return all_conversations
 
 
-def get_keywords(text):
-    # Placeholder for now
-    logger.debug("get_keywords called (placeholder)")
-    return ["limit reached"]
+def get_keywords(text, num_topics=3, num_keywords=5):
+    """
+    Extract keywords from text using gensim LDA topic modeling.
+    
+    Args:
+        text: Input text to analyze
+        num_topics: Number of topics to extract (default: 3)
+        num_keywords: Number of keywords per topic to return (default: 5)
+    
+    Returns:
+        List of keywords extracted from the most relevant topics
+    """
+    logger.debug("get_keywords called with gensim topic analysis")
+    
+    if not text or not text.strip():
+        logger.debug("Empty text provided to get_keywords")
+        return []
+    
+    # Preprocess the text to get tokens
+    tokens = preprocess(text)
+    
+    if not tokens or len(tokens) < 3:
+        logger.debug("Insufficient tokens after preprocessing: %d", len(tokens))
+        return []
+    
+    # Create a corpus: list of tokenized documents (we have one document)
+    # For LDA, we need at least some variation, so we'll treat the text as if 
+    # it contains multiple sub-documents by splitting it
+    try:
+        # Split tokens into smaller chunks to give LDA some structure to work with
+        chunk_size = max(10, len(tokens) // 5)  # At least 10 tokens per chunk
+        chunks = [tokens[i:i+chunk_size] for i in range(0, len(tokens), chunk_size)]
+        
+        # Filter out very small chunks
+        chunks = [chunk for chunk in chunks if len(chunk) >= 3]
+        
+        if not chunks:
+            logger.debug("No valid chunks created from tokens")
+            return []
+        
+        # Create dictionary and corpus for gensim
+        dictionary = corpora.Dictionary(chunks)
+        
+        # Filter extremes: words that appear in less than 1 document or more than 80% of documents
+        dictionary.filter_extremes(no_below=1, no_above=0.8, keep_n=100)
+        
+        if len(dictionary) == 0:
+            logger.debug("Dictionary is empty after filtering")
+            return []
+        
+        # Create bag-of-words corpus
+        corpus = [dictionary.doc2bow(chunk) for chunk in chunks]
+        
+        # Build LDA model with fewer topics for short texts
+        actual_num_topics = min(num_topics, len(chunks), len(dictionary))
+        if actual_num_topics < 1:
+            logger.debug("Cannot create topics with current parameters")
+            return []
+        
+        lda_model = LdaModel(
+            corpus=corpus,
+            id2word=dictionary,
+            num_topics=actual_num_topics,
+            random_state=42,
+            passes=10,
+            alpha='auto',
+            per_word_topics=True
+        )
+        
+        # Extract keywords from all topics
+        keywords = []
+        for topic_id in range(actual_num_topics):
+            topic_words = lda_model.show_topic(topic_id, topn=num_keywords)
+            # topic_words is a list of (word, probability) tuples
+            for word, prob in topic_words:
+                if word not in keywords and len(word) > 2:  # Avoid very short words
+                    keywords.append(word)
+        
+        logger.debug("Extracted %d keywords using gensim LDA", len(keywords))
+        return keywords[:15]  # Return top 15 keywords maximum
+        
+    except Exception as e:
+        logger.exception("Error in gensim topic analysis: %s", e)
+        return []
 
 
 def get_relevance(text):
