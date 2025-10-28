@@ -28,6 +28,19 @@ from gensim import corpora
 from gensim.models import LdaModel
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
+# Import new analysis modules
+from personality_analyzer import (
+    calculate_big_five_scores,
+    map_big_five_to_mbti,
+    calculate_emotion_analysis
+)
+from conversation_metrics import (
+    calculate_response_times,
+    calculate_topic_response_time,
+    calculate_emotional_reciprocity,
+    aggregate_topic_metrics
+)
+
 # ---------------------------
 # Constants
 # ---------------------------
@@ -101,7 +114,7 @@ client.set_language_override("ger")
 # NLTK downloads (only the common ones required)
 # ---------------------------
 # Download the minimum set and log. Avoid 'all' which is heavy.
-nltk_needed = ["all"]
+nltk_needed = ["punkt", "punkt_tab", "averaged_perceptron_tagger", "wordnet", "stopwords", "omw-1.4"]
 for res in nltk_needed:
     try:
         nltk.data.find(res)
@@ -109,7 +122,7 @@ for res in nltk_needed:
     except LookupError:
         logger.info(f"NLTK resource {res} not found. Downloading...")
         try:
-            nltk.download(res)
+            nltk.download(res, quiet=True)
             logger.info(f"Downloaded NLTK resource: {res}")
         except Exception as e:
             logger.exception(f"Failed to download NLTK resource {res}: {e}")
@@ -421,10 +434,17 @@ def run_analysis(file_content, username):
     logger.debug("run_analysis: parsed %d conversations", len(conversations))
     matrix = {}
     mergetext = {}
+    
+    # Store original conversation messages for metrics calculation
+    conversation_messages = {}
 
     for idx, conv_msgs in enumerate(conversations, 1):
         t0 = time.time()
         matrix[idx] = {"idx": idx}
+        
+        # Store conversation messages for metrics
+        conversation_messages[idx] = conv_msgs
+        
         user_msgs = [msg["message"] for msg in conv_msgs if msg.get("user") == username]
         mergetext[idx] = " ".join(user_msgs)
         text = mergetext[idx]
@@ -476,12 +496,46 @@ def run_analysis(file_content, username):
                 matrix[idx]["sentiment"] = [sentiment_label]
                 matrix[idx]["sent_rating"] = [sent_rating_value]
                 matrix[idx]["vader_scores"] = vader_scores  # Store detailed vader scores
+                matrix[idx]["sentiment_compound"] = compound_score  # Store for reciprocity calculation
                 logger.debug("Conversation #%d sentiment=%s sent_rating=%s compound=%s", 
                            idx, sentiment_label, sent_rating_value, compound_score)
             except Exception:
                 logger.exception("Error analyzing sentiment for conversation %d", idx)
                 matrix[idx]["sentiment"] = ["error"]
                 matrix[idx]["sent_rating"] = []
+                matrix[idx]["sentiment_compound"] = 0.0
+        
+        # Calculate Big Five personality traits
+        try:
+            emojis = matrix[idx].get("emojies", [])
+            big_five = calculate_big_five_scores(text, emojis)
+            matrix[idx]["big_five"] = big_five
+            logger.debug("Conversation #%d Big Five calculated", idx)
+        except Exception:
+            logger.exception("Error calculating Big Five for conversation %d", idx)
+            matrix[idx]["big_five"] = {}
+        
+        # Map Big Five to MBTI
+        try:
+            if matrix[idx].get("big_five"):
+                mbti = map_big_five_to_mbti(matrix[idx]["big_five"])
+                matrix[idx]["mbti"] = mbti
+                logger.debug("Conversation #%d MBTI=%s", idx, mbti)
+        except Exception:
+            logger.exception("Error mapping MBTI for conversation %d", idx)
+            matrix[idx]["mbti"] = "XXXX"
+        
+        # Enhanced emotion analysis
+        try:
+            emojis = matrix[idx].get("emojies", [])
+            compound = matrix[idx].get("sentiment_compound", 0.0)
+            emotion_analysis = calculate_emotion_analysis(emojis, compound)
+            matrix[idx]["emotion_analysis"] = emotion_analysis
+            logger.debug("Conversation #%d emotion analysis: dominant=%s", 
+                        idx, emotion_analysis.get("dominant_emotion"))
+        except Exception:
+            logger.exception("Error in emotion analysis for conversation %d", idx)
+            matrix[idx]["emotion_analysis"] = {}
 
         matrix[idx]["keywords"] = get_keywords(text) if text else []
         matrix[idx]["nouns"] = extract_nouns(text) if text else []
@@ -521,11 +575,46 @@ def run_analysis(file_content, username):
         except Exception:
             logger.exception("Error classifying topic for conversation %d", idx)
             matrix[idx]["topic"] = ["error"]
+        
+        # Calculate response times for this conversation
+        try:
+            response_times = calculate_response_times(conv_msgs)
+            topic_avg_response = calculate_topic_response_time(conv_msgs)
+            matrix[idx]["response_times"] = {
+                "per_user": response_times,
+                "topic_average": topic_avg_response
+            }
+            logger.debug("Conversation #%d response times calculated", idx)
+        except Exception:
+            logger.exception("Error calculating response times for conversation %d", idx)
+            matrix[idx]["response_times"] = {"per_user": {}, "topic_average": 0.0}
+        
+        # Calculate emotional reciprocity
+        try:
+            # Enrich messages with sentiment for reciprocity calculation
+            enriched_msgs = []
+            for msg in conv_msgs:
+                enriched_msg = msg.copy()
+                enriched_msg["sentiment_compound"] = matrix[idx].get("sentiment_compound", 0.0)
+                # Extract emojis for each message if needed
+                try:
+                    msg_emoji_result = emot_obj.emoji(msg.get("message", ""))
+                    enriched_msg["emojis"] = msg_emoji_result.get("value", [])
+                except:
+                    enriched_msg["emojis"] = []
+                enriched_msgs.append(enriched_msg)
+            
+            reciprocity = calculate_emotional_reciprocity(enriched_msgs)
+            matrix[idx]["emotional_reciprocity"] = reciprocity
+            logger.debug("Conversation #%d emotional reciprocity=%.3f", idx, reciprocity)
+        except Exception:
+            logger.exception("Error calculating emotional reciprocity for conversation %d", idx)
+            matrix[idx]["emotional_reciprocity"] = 0.5
 
         logger.debug("Conversation #%d processing time: %.2fs", idx, time.time() - t0)
 
     logger.info("run_analysis finished in %.2fs", time.time() - start_time)
-    return matrix
+    return matrix, conversation_messages
 
 
 def summarize_matrix(matrix):
@@ -558,7 +647,13 @@ def summarize_matrix(matrix):
             "topic": topic,
             "emojies": emo_bew,
             "sentiment": sentiment,
-            "wordcloud": words
+            "wordcloud": words,
+            # Add new metrics
+            "big_five": entry.get("big_five", {}),
+            "mbti": entry.get("mbti", ""),
+            "emotion_analysis": entry.get("emotion_analysis", {}),
+            "response_times": entry.get("response_times", {}),
+            "emotional_reciprocity": entry.get("emotional_reciprocity", 0.5)
         }
 
     emo_vars = [x for x in emo_vars if x]
@@ -669,7 +764,7 @@ if st.button("Start Analysis"):
 
             with st.spinner("Analyzing conversations... This may take a while."):
                 total_start = time.time()
-                matrix = run_analysis(file_content, username.strip())
+                matrix, conversation_messages = run_analysis(file_content, username.strip())
                 summary = summarize_matrix(matrix)
                 total_time = time.time() - total_start
                 logger.info("Full analysis completed in %.2fs", total_time)
