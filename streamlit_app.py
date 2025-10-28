@@ -776,40 +776,84 @@ if st.button("Start Analysis"):
             st.write(f"**Negative Topics ({len(summary['negative_topics'])}):** {', '.join(summary['negative_topics'])}")
             st.write(f"**Emotional Variability:** {summary['emotion_variability']:.3f}")
 
-            st.subheader("Analysis")
-            message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
-            # pass analysis data to model
-            message = f'{message}\n{json.dumps(summary["analysis"], ensure_ascii=False, indent=2)}'
-            try:
-                logger.debug("Sending prompt to g4f model (truncated)")
-                response = g4f.ChatCompletion.create(
-                    model=g4f.models.gpt_4,
-                    messages=[{"role": "user", "content": message}],
-                )
-                logger.debug("g4f response type: %s", type(response))
-            except Exception:
-                logger.exception("Error while calling g4f ChatCompletion")
-                response = "Error while generating profile."
+            # Show the analysis summary to the user BEFORE sending to g4f
+            st.subheader("Analysis Summary")
+            st.json(summary['analysis'])
+            
+            # Add option to download debug info (analysis data)
+            debug_info = {
+                "summary": {
+                    "positive_topics": summary['positive_topics'],
+                    "negative_topics": summary['negative_topics'],
+                    "emotion_variability": summary['emotion_variability']
+                },
+                "analysis": summary['analysis'],
+                "matrix": summary['matrix'],
+                "metadata": {
+                    "username": username.strip(),
+                    "file_size_bytes": file_size,
+                    "total_conversations": len(matrix),
+                    "analysis_time_seconds": total_time
+                }
+            }
+            debug_json = json.dumps(debug_info, ensure_ascii=False, indent=2)
+            st.download_button(
+                label="Download Complete Analysis (Debug Info)",
+                data=debug_json,
+                file_name="whatsapp_analysis_debug.json",
+                mime="application/json",
+            )
+            
+            # Add button to proceed with g4f analysis
+            if st.button("Generate Psychological Profile with AI"):
+                with st.spinner("Generating AI profile..."):
+                    st.subheader("AI-Generated Psychological Profile")
+                    message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
+                    # pass analysis data to model
+                    message = f'{message}\n{json.dumps(summary["analysis"], ensure_ascii=False, indent=2)}'
+                    try:
+                        logger.debug("Sending prompt to g4f model (truncated)")
+                        response = g4f.ChatCompletion.create(
+                            model=g4f.models.gpt_4,
+                            messages=[{"role": "user", "content": message}],
+                        )
+                        logger.debug("g4f response type: %s", type(response))
+                    except Exception:
+                        logger.exception("Error while calling g4f ChatCompletion")
+                        response = "Error while generating profile."
 
-            st.write(response)
+                    st.write(response)
+            
             st.subheader("Detailed Conversation Matrix")
             st.json(summary['matrix'])
 
-            # Provide JSON download
+            # Provide JSON download (kept for backward compatibility)
             json_data = json.dumps(summary['matrix'], ensure_ascii=False, indent=4)
             st.download_button(
-                label="Download conv_matrix.json",
+                label="Download conv_matrix.json (Matrix Only)",
                 data=json_data,
                 file_name="conv_matrix.json",
                 mime="application/json",
             )
 
-            # If debug mode, show logs and offer download
+            # Show logs in debug mode
             if debug_mode:
                 st.subheader("Debug Logs")
                 logs = get_logs()
                 st.text_area("Logs", value=logs, height=300)
-                st.download_button("Download logs", data=logs, file_name="analysis_logs.txt", mime="text/plain")
+            
+            # Always offer log download (available even when debug mode is off)
+            st.subheader("Debug Information")
+            logs = get_logs()
+            if logs.strip():
+                st.download_button(
+                    label="Download Analysis Logs", 
+                    data=logs, 
+                    file_name="analysis_logs.txt", 
+                    mime="text/plain"
+                )
+            else:
+                st.info("No logs available. Enable debug mode at the top to capture detailed logs.")
     except Exception as main_e:
         logger.exception("Unhandled exception during analysis: %s", main_e)
         st.error(f"An unexpected error occurred: {main_e}")
