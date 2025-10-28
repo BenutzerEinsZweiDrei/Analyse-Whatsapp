@@ -42,3 +42,19 @@ Thumbs.db
 # Temporary files
 /tmp/
 *.log
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Test coverage
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.pytest_cache/
+
+# Backup files
+*_backup.py
+*_old.py
