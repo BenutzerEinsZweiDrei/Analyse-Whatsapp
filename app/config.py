@@ -55,10 +55,14 @@ def get_settings() -> Settings:
     try:
         import streamlit as st
         if hasattr(st, "secrets"):
-            if not settings.jina_api_key and "JINA_API_KEY" in st.secrets:
-                settings.jina_api_key = st.secrets["JINA_API_KEY"]
-            if not settings.textrazor_api_key and "TEXTRAZOR_API_KEY" in st.secrets:
-                settings.textrazor_api_key = st.secrets["TEXTRAZOR_API_KEY"]
+            try:
+                if not settings.jina_api_key and "JINA_API_KEY" in st.secrets:
+                    settings.jina_api_key = st.secrets["JINA_API_KEY"]
+                if not settings.textrazor_api_key and "TEXTRAZOR_API_KEY" in st.secrets:
+                    settings.textrazor_api_key = st.secrets["TEXTRAZOR_API_KEY"]
+            except Exception:
+                # Secrets not configured or accessible (e.g., in tests or development)
+                pass
     except ImportError:
         # Streamlit not available (e.g., in tests)
         pass
