@@ -156,6 +156,14 @@ class TestLocalProfileGenerator(unittest.TestCase):
             "matrix": self.test_matrix
         }
     
+    def _is_dataframe(self, obj):
+        """Helper to check if object is a pandas DataFrame."""
+        try:
+            import pandas as pd
+            return isinstance(obj, pd.DataFrame)
+        except ImportError:
+            return False
+    
     def test_load_and_validate(self):
         """Test step 1: load and validate."""
         summary, matrix = load_and_validate(self.test_summary, self.test_matrix)
@@ -176,13 +184,7 @@ class TestLocalProfileGenerator(unittest.TestCase):
         records = normalize_structure(matrix)
         
         # Check that we get records (can be DataFrame or list)
-        try:
-            import pandas as pd
-            is_dataframe = isinstance(records, pd.DataFrame)
-        except ImportError:
-            is_dataframe = False
-        
-        if is_dataframe:
+        if self._is_dataframe(records):
             self.assertEqual(len(records), 3)
             
             # Check columns exist
@@ -223,13 +225,7 @@ class TestLocalProfileGenerator(unittest.TestCase):
         cleaned = clean_data(records)
         
         # Check that we still have records (can be DataFrame or list)
-        try:
-            import pandas as pd
-            is_dataframe = isinstance(cleaned, pd.DataFrame)
-        except ImportError:
-            is_dataframe = False
-        
-        if is_dataframe:
+        if self._is_dataframe(cleaned):
             self.assertEqual(len(cleaned), 3)
             
             # Check that numeric columns exist and have proper types

@@ -1052,7 +1052,8 @@ def run_local_analysis(summary: Dict, matrix: Dict) -> Tuple[Dict, str]:
                 "basic_metrics": {},
                 "big_five_aggregation": {},
                 "correlations": {},
-                "segments": {},
+                "topics_summary": {},
+                "mbti_summary": {},
                 "emotion_insights": {},
                 "advanced_analysis": {},
                 "per_conversation_table": []
@@ -1114,7 +1115,8 @@ def run_local_analysis(summary: Dict, matrix: Dict) -> Tuple[Dict, str]:
             "basic_metrics": {},
             "big_five_aggregation": {},
             "correlations": {},
-            "segments": {},
+            "topics_summary": {},
+            "mbti_summary": {},
             "emotion_insights": {},
             "advanced_analysis": {},
             "per_conversation_table": []
