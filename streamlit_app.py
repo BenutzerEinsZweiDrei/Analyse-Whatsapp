@@ -45,7 +45,7 @@ settings = get_settings()
 # Streamlit UI
 # ---------------------------
 
-st.title("WhatsApp Conversation Analyzer (with Debug Info)")
+st.title("WhatsApp Conversation Analyzer")
 
 # Initialize session state for persistence across reruns
 if "analysis_done" not in st.session_state:
