@@ -416,6 +416,7 @@ def run_analysis(file_content, username):
     start_time = time.time()
     empath_lex = Empath()
     emot_obj = emot.core.emot()
+    vader_analyzer = SentimentIntensityAnalyzer()  # Initialize once outside the loop
     conversations = parse_conversations_from_text(file_content)
     logger.debug("run_analysis: parsed %d conversations", len(conversations))
     matrix = {}
@@ -457,7 +458,6 @@ def run_analysis(file_content, username):
             try:
                 t_call = time.time()
                 # Use vaderSentiment for sentiment analysis
-                vader_analyzer = SentimentIntensityAnalyzer()
                 vader_scores = vader_analyzer.polarity_scores(text)
                 compound_score = vader_scores['compound']
                 
@@ -544,7 +544,7 @@ def summarize_matrix(matrix):
 
         if topic and topic != ["no topic"]:
             if sent_rating:
-                if sent_rating[0] > 4:
+                if sent_rating[0] >= 5.0:
                     addtopic.append(topic)
                 else:
                     negtopic.append(topic)
