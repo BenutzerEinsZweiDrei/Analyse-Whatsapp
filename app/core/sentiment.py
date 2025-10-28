@@ -6,6 +6,7 @@ Wraps VADER sentiment analyzer and provides sentiment label conversion.
 
 import logging
 from typing import Dict
+
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 from app.cache import cached_resource
@@ -17,7 +18,7 @@ logger = logging.getLogger("whatsapp_analyzer")
 def get_vader_analyzer() -> SentimentIntensityAnalyzer:
     """
     Get cached VADER sentiment analyzer instance.
-    
+
     Returns:
         SentimentIntensityAnalyzer instance
     """
@@ -28,10 +29,10 @@ def get_vader_analyzer() -> SentimentIntensityAnalyzer:
 def sentiment_label_from_compound(compound_score: float) -> str:
     """
     Convert VADER compound score to sentiment label.
-    
+
     Args:
         compound_score: VADER compound score (-1 to 1)
-        
+
     Returns:
         Sentiment label: "positive", "negative", or "neutral"
     """
@@ -46,10 +47,10 @@ def sentiment_label_from_compound(compound_score: float) -> str:
 def compound_to_rating(compound_score: float) -> float:
     """
     Convert VADER compound score (-1 to 1) to 0-10 rating scale.
-    
+
     Args:
         compound_score: VADER compound score (-1 to 1)
-        
+
     Returns:
         Rating on 0-10 scale
     """
@@ -61,19 +62,19 @@ def compound_to_rating(compound_score: float) -> float:
 def analyze_sentiment(text: str) -> Dict:
     """
     Analyze sentiment of text using VADER.
-    
+
     Returns detailed scores, compound score, label, and scaled rating.
-    
+
     Args:
         text: Input text to analyze
-        
+
     Returns:
         Dictionary with:
         - vader: Full VADER scores (neg, neu, pos, compound)
         - compound: Compound score (-1 to 1)
         - label: Sentiment label (positive/negative/neutral)
         - scaled_rating: Rating on 0-10 scale
-        
+
     Example:
         >>> result = analyze_sentiment("I love this!")
         >>> result['label']
@@ -82,35 +83,37 @@ def analyze_sentiment(text: str) -> Dict:
         8.5
     """
     logger.debug(f"Analyzing sentiment for text (length={len(text)})")
-    
+
     if not text or not text.strip():
         return {
             "vader": {"neg": 0.0, "neu": 1.0, "pos": 0.0, "compound": 0.0},
             "compound": 0.0,
             "label": "neutral",
-            "scaled_rating": 5.0
+            "scaled_rating": 5.0,
         }
-    
+
     # Get VADER analyzer
     analyzer = get_vader_analyzer()
-    
+
     # Get sentiment scores
     vader_scores = analyzer.polarity_scores(text)
-    compound_score = vader_scores['compound']
-    
+    compound_score = vader_scores["compound"]
+
     # Convert to label
     label = sentiment_label_from_compound(compound_score)
-    
+
     # Convert to 0-10 rating
     rating = compound_to_rating(compound_score)
-    
+
     result = {
         "vader": vader_scores,
         "compound": compound_score,
         "label": label,
-        "scaled_rating": rating
+        "scaled_rating": rating,
     }
-    
-    logger.debug(f"Sentiment analysis: label={label}, rating={rating}, compound={compound_score:.3f}")
-    
+
+    logger.debug(
+        f"Sentiment analysis: label={label}, rating={rating}, compound={compound_score:.3f}"
+    )
+
     return result
