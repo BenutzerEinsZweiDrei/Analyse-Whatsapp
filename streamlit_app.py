@@ -107,10 +107,23 @@ if debug_mode:
         )
 
 # File upload and analysis form
+st.info(
+    "📋 **How to get started:**\n"
+    "1. Export your WhatsApp chat (Settings → Export chat → Without media)\n"
+    "2. Upload the .txt file below\n"
+    "3. Enter the username you want to analyze (as it appears in the chat)\n"
+    "4. Click 'Start Analysis' to begin processing"
+)
+
 with st.form("analysis_form"):
     uploaded_file = st.file_uploader("Upload your whatsapp.txt file", type=["txt"])
+    st.caption("Upload the exported WhatsApp chat file in .txt format")
+    
     username = st.text_input("Enter the username to analyze")
+    st.caption("Enter the exact username as it appears in the chat messages")
+    
     submit_analysis = st.form_submit_button("Start Analysis")
+    st.caption("⏱️ Analysis typically takes 30-60 seconds depending on chat size")
 
 if submit_analysis:
     try:
@@ -217,6 +230,19 @@ if st.session_state.analysis_done:
         mime="application/json",
         key="download_debug_info",
     )
+    st.caption("💾 Download complete analysis data including all metrics and metadata for debugging")
+
+    # Profile generation options
+    st.divider()
+    st.subheader("🧠 Psychological Profile Generation")
+    st.info(
+        "**Choose a profile generation method:**\n\n"
+        "🔒 **Local Profile** (Recommended): Generates a comprehensive psychological profile "
+        "using local algorithms. All processing happens on your device - no data is sent to external servers. "
+        "Includes Big Five personality traits, MBTI analysis, emotion insights, and detailed metrics.\n\n"
+        "🤖 **AI Profile**: Uses artificial intelligence to generate a natural language profile summary. "
+        "Requires internet connection and may send data to external AI services. Results may vary."
+    )
 
     # Local psychological profile generation button
     if st.button("Generate Local Psychological Profile", key="generate_local"):
@@ -246,6 +272,9 @@ if st.session_state.analysis_done:
 
                 # Download buttons
                 st.subheader("Download Results")
+                st.caption(
+                    "Export your analysis results in different formats for further analysis or record keeping"
+                )
 
                 if "exports" in results and "metrics_json" in results["exports"]:
                     st.download_button(
@@ -255,6 +284,7 @@ if st.session_state.analysis_done:
                         mime="application/json",
                         key="download_local_json",
                     )
+                    st.caption("Complete analysis with all metrics, personality traits, and aggregated data")
 
                 if "exports" in results and "per_conversation_csv" in results["exports"]:
                     st.download_button(
@@ -264,6 +294,7 @@ if st.session_state.analysis_done:
                         mime="text/csv",
                         key="download_local_csv",
                     )
+                    st.caption("Individual conversation metrics in spreadsheet format - great for custom analysis")
 
                 if "exports" in results and "flagged_json" in results["exports"]:
                     flagged_data = results["exports"]["flagged_json"]
@@ -275,6 +306,7 @@ if st.session_state.analysis_done:
                             mime="application/json",
                             key="download_flagged_json",
                         )
+                        st.caption("Conversations with unusual emotional patterns or outlier metrics")
 
                 logger.info("Local profile generation completed successfully")
 
@@ -323,7 +355,12 @@ if st.session_state.analysis_done:
                     st.exception(e)
 
     # Detailed conversation matrix
+    st.divider()
     st.subheader("Detailed Conversation Matrix")
+    st.caption(
+        "Raw analysis data showing metrics for each conversation: sentiment scores, "
+        "personality traits (Big Five), MBTI indicators, emotions, topics, and response times"
+    )
     st.json(summary["matrix"])
 
     # Download matrix JSON
@@ -335,6 +372,7 @@ if st.session_state.analysis_done:
         mime="application/json",
         key="download_matrix_json",
     )
+    st.caption("Download just the conversation matrix data without metadata")
 
     # Show logs in debug mode
     if debug_mode:
@@ -343,7 +381,9 @@ if st.session_state.analysis_done:
         st.text_area("Logs", value=logs, height=300, key="debug_logs_area")
 
     # Always offer log download
+    st.divider()
     st.subheader("Debug Information")
+    st.caption("Technical logs for troubleshooting issues or understanding the analysis process")
     logs = get_logs()
     if logs.strip():
         st.download_button(
@@ -353,6 +393,7 @@ if st.session_state.analysis_done:
             mime="text/plain",
             key="download_logs",
         )
+        st.caption("Download detailed processing logs including timing information and any warnings")
     else:
         st.info(
             "No logs available. Enable the 'Enable debug mode' checkbox above to capture detailed logs."
