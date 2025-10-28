@@ -118,10 +118,10 @@ st.info(
 with st.form("analysis_form"):
     uploaded_file = st.file_uploader("Upload your whatsapp.txt file", type=["txt"])
     st.caption("Upload the exported WhatsApp chat file in .txt format")
-    
+
     username = st.text_input("Enter the username to analyze")
     st.caption("Enter the exact username as it appears in the chat messages")
-    
+
     submit_analysis = st.form_submit_button("Start Analysis")
     st.caption("⏱️ Analysis typically takes 30-60 seconds depending on chat size")
 
