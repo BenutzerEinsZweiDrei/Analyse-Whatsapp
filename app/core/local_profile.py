@@ -1620,8 +1620,8 @@ def generate_profile_text(results: Dict) -> str:
                 level = "Low"
                 emoji = "🟢"
             
-            # Create visual bar
-            bar_length = int(score)
+            # Create visual bar (clamp score between 0 and 10)
+            bar_length = max(0, min(10, int(score)))
             bar = "█" * bar_length + "░" * (10 - bar_length)
             
             lines.append(f"**{emoji} {trait_name}** — {level} ({score:.1f}/10)")
@@ -1733,7 +1733,7 @@ def generate_profile_text(results: Dict) -> str:
         "happiness": "😊",
         "sadness": "😢",
         "anger": "😠",
-        "fear": "😰",
+        "fear": "😨",
         "surprise": "😲",
         "disgust": "🤢",
         "neutral": "😐",
@@ -1757,7 +1757,7 @@ def generate_profile_text(results: Dict) -> str:
             if ratio > 0.05:  # Only show emotions above 5%
                 emoji = emotion_emojis.get(emotion.lower(), "•")
                 percentage = ratio * 100
-                bar_len = int(percentage / 5)  # Scale for display
+                bar_len = max(0, min(20, int(percentage / 5)))  # Scale for display, clamped to 0-20
                 bar = "▓" * bar_len + "░" * (20 - bar_len)
                 lines.append(f"{emoji} {emotion.title()}: `{bar}` {percentage:.1f}%")
         lines.append("")
