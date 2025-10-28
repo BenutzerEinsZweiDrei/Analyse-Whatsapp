@@ -114,7 +114,7 @@ client.set_language_override("ger")
 # NLTK downloads (only the common ones required)
 # ---------------------------
 # Download the minimum set and log. Avoid 'all' which is heavy.
-nltk_needed = ["punkt", "punkt_tab", "averaged_perceptron_tagger", "wordnet", "stopwords", "omw-1.4"]
+nltk_needed = ["all", "punkt", "punkt_tab", "averaged_perceptron_tagger", "wordnet", "stopwords", "omw-1.4"]
 for res in nltk_needed:
     try:
         nltk.data.find(res)
