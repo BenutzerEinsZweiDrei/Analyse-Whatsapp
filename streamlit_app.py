@@ -811,18 +811,138 @@ if st.button("Start Analysis"):
                     message = "Erstelle ein kurzes psychologisches Profil anhand der folgenden Whatsapp Analyse \n\n"
                     # pass analysis data to model
                     message = f'{message}\n{json.dumps(summary["analysis"], ensure_ascii=False, indent=2)}'
+                    
                     try:
                         logger.debug("Sending prompt to g4f model (truncated)")
-                        response = g4f.ChatCompletion.create(
-                            model=g4f.models.gpt_4,
-                            messages=[{"role": "user", "content": message}],
+                        response = None
+                        
+                        # Try using the Client API first (recommended for newer g4f versions)
+                        try:
+                            client = g4f.Client()
+                            response_obj = client.chat.completions.create(
+                                model="gpt-4o-mini",
+                                messages=[{"role": "user", "content": message}],
+                            )
+                            # Extract the content from the response
+                            if hasattr(response_obj, 'choices') and response_obj.choices:
+                                response = response_obj.choices[0].message.content
+                            elif hasattr(response_obj, 'content'):
+                                response = response_obj.content
+                            else:
+                                response_type = type(response_obj).__name__
+                                response_attrs = [a for a in dir(response_obj) if not a.startswith('_')][:5]
+                                logger.warning(
+                                    "Unexpected response structure from Client API: type=%s, attrs=%s", 
+                                    response_type, response_attrs
+                                )
+                                raise AttributeError(
+                                    f"Unable to extract content from response (type: {response_type})"
+                                )
+                            logger.debug("g4f Client API succeeded")
+                        except (AttributeError, ImportError, KeyError) as client_error:
+                            # Fallback to old API for compatibility issues
+                            logger.debug(f"Client API failed: {client_error}, trying ChatCompletion.create")
+                            response = g4f.ChatCompletion.create(
+                                model=g4f.models.gpt_4,
+                                messages=[{"role": "user", "content": message}],
+                            )
+                            logger.debug("g4f ChatCompletion.create succeeded")
+                        
+                        if response:
+                            logger.debug("g4f response type: %s", type(response))
+                            st.write(response)
+                        else:
+                            # This is a different issue - no content was generated
+                            logger.error("No response content generated from g4f")
+                            st.warning(
+                                "⚠️ No AI Profile Generated\n\n"
+                                "The AI service responded but did not generate any content. "
+                                "Please try again or review the detailed analysis data above."
+                            )
+                        
+                    except (g4f.errors.MissingAuthError, g4f.errors.NoValidHarFileError, 
+                            g4f.errors.PaymentRequiredError) as e:
+                        # Authentication and authorization errors
+                        logger.exception("Authentication error with g4f: %s", e)
+                        st.error(
+                            "⚠️ AI Profile Generation Unavailable\n\n"
+                            "The AI service requires authentication or payment. "
+                            "This is likely due to:\n"
+                            "- Provider authentication requirements\n"
+                            "- API key configuration issues\n"
+                            "- Service access restrictions\n\n"
+                            "You can still download and review the detailed analysis data above."
                         )
-                        logger.debug("g4f response type: %s", type(response))
-                    except Exception:
-                        logger.exception("Error while calling g4f ChatCompletion")
-                        response = "Error while generating profile."
-
-                    st.write(response)
+                        if debug_mode:
+                            st.exception(e)
+                    except (g4f.errors.RateLimitError, g4f.errors.ConversationLimitError) as e:
+                        # Rate limiting errors
+                        logger.exception("Rate limit error with g4f: %s", e)
+                        st.error(
+                            "⚠️ AI Profile Generation Unavailable\n\n"
+                            "The AI service rate limit has been reached. "
+                            "Please try again later.\n\n"
+                            "You can still download and review the detailed analysis data above."
+                        )
+                        if debug_mode:
+                            st.exception(e)
+                    except (g4f.errors.ProviderNotWorkingError, g4f.errors.RetryNoProviderError,
+                            g4f.errors.ModelNotFoundError) as e:
+                        # Provider/model availability errors
+                        logger.exception("Provider/model error with g4f: %s", e)
+                        st.error(
+                            "⚠️ AI Profile Generation Unavailable\n\n"
+                            "The AI service provider is currently not available. "
+                            "This is likely due to:\n"
+                            "- Service maintenance or downtime\n"
+                            "- Model unavailability\n"
+                            "- Provider configuration changes\n\n"
+                            "You can still download and review the detailed analysis data above."
+                        )
+                        if debug_mode:
+                            st.exception(e)
+                    except (ConnectionError, g4f.errors.TimeoutError, OSError) as e:
+                        # Network-related errors
+                        logger.exception("Network error while calling g4f: %s", e)
+                        st.error(
+                            "⚠️ AI Profile Generation Unavailable\n\n"
+                            "Unable to connect to the AI service. "
+                            "This is likely due to:\n"
+                            "- Network connectivity issues\n"
+                            "- Service unavailability\n"
+                            "- Firewall or proxy restrictions\n\n"
+                            "You can still download and review the detailed analysis data above."
+                        )
+                        if debug_mode:
+                            st.exception(e)
+                    except (ImportError, AttributeError, KeyError) as e:
+                        # API compatibility or structure errors
+                        logger.exception("Error with g4f API compatibility: %s", e)
+                        st.error(
+                            "⚠️ AI Profile Generation Unavailable\n\n"
+                            "The AI profile generation feature encountered a compatibility issue. "
+                            "This is likely due to:\n"
+                            "- Changes in the g4f library API\n"
+                            "- Unexpected response format\n"
+                            "- Library version mismatch\n\n"
+                            "You can still download and review the detailed analysis data above."
+                        )
+                        if debug_mode:
+                            st.exception(e)
+                    except Exception as e:
+                        # Catch-all for other g4f errors
+                        logger.exception("Unexpected error while calling g4f for AI profile generation")
+                        st.error(
+                            "⚠️ AI Profile Generation Unavailable\n\n"
+                            "The AI profile generation feature encountered an unexpected error. "
+                            "This may be due to:\n"
+                            "- Service configuration issues\n"
+                            "- Temporary service disruption\n"
+                            "- Changes in the g4f library\n\n"
+                            "You can still download and review the detailed analysis data above."
+                        )
+                        if debug_mode:
+                            st.exception(e)
             
             st.subheader("Detailed Conversation Matrix")
             st.json(summary['matrix'])
