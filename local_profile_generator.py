@@ -1041,7 +1041,8 @@ def highlights_and_rankings(
 
         # Average emotion ratios
         avg_emotion_ratios = {
-            emotion: total / n for emotion, total in agg["emotion_ratio_sums"].items()
+            emotion: total / n
+            for emotion, total in agg["emotion_ratio_sums"].items()
         }
 
         topics_aggregated[topic] = {
@@ -1249,7 +1250,9 @@ def highlights_and_rankings(
         "final_insight": final_insight if include_final_insight else None,
     }
 
-    logger.debug(f"Generated highlights and rankings for {len(topics_aggregated)} topics")
+    logger.debug(
+        f"Generated highlights and rankings for {len(topics_aggregated)} topics"
+    )
     return result
 
 

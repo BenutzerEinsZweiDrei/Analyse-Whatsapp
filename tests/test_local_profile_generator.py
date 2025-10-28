@@ -465,7 +465,6 @@ class TestLocalProfileGenerator(unittest.TestCase):
         # Convert to list if it's a DataFrame
         try:
             import pandas as pd
-
             if isinstance(cleaned, pd.DataFrame):
                 cleaned = cleaned.to_dict("records")
         except ImportError:
