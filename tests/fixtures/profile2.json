@@ -1,0 +1,74 @@
+{
+  "personality_aggregation": {
+    "openness": 0.68,
+    "conscientiousness": 0.78,
+    "extraversion": 0.55,
+    "agreeableness": 0.88,
+    "neuroticism": 0.35
+  },
+  "basic_metrics": {
+    "dominant_emotion_counts": {
+      "joy": 98,
+      "sadness": 67,
+      "anger": 15,
+      "fear": 8,
+      "gratitude": 105,
+      "love": 42
+    },
+    "emotional_reciprocity": 0.75,
+    "mean_response_time": 98.3
+  },
+  "mbti_summary": {
+    "INTJ": {
+      "count": 10,
+      "mean_reciprocity": 0.69,
+      "mean_response_time": 142.0
+    },
+    "INFP": {
+      "count": 18,
+      "mean_reciprocity": 0.81,
+      "mean_response_time": 88.5
+    },
+    "ESTJ": {
+      "count": 7,
+      "mean_reciprocity": 0.72,
+      "mean_response_time": 105.0
+    }
+  },
+  "correlations": {
+    "agreeableness_vs_reciprocity": {
+      "pearson_r": 0.62,
+      "pearson_p": 0.008,
+      "spearman_r": 0.59,
+      "spearman_p": 0.012
+    },
+    "neuroticism_vs_response_time": {
+      "pearson_r": 0.28,
+      "pearson_p": 0.121,
+      "spearman_r": 0.25,
+      "spearman_p": 0.145
+    }
+  },
+  "per_topic_analysis": {
+    "work": {
+      "mean_reciprocity": 0.72,
+      "mean_response_time": 120.0,
+      "dominant_emotions": {
+        "joy": 25,
+        "anger": 5
+      }
+    },
+    "hobbies": {
+      "mean_reciprocity": 0.89,
+      "mean_response_time": 75.0,
+      "dominant_emotions": {
+        "joy": 55,
+        "gratitude": 28
+      }
+    }
+  },
+  "metadata": {
+    "created_at": "2024-01-16T14:20:00Z",
+    "version": "1.0"
+  }
+}

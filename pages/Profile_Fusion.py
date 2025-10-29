@@ -1,208 +1,86 @@
 """
-Personality Profile Merger - Streamlit App
+Personality Profile Fusion v2.0 - Advanced Streamlit App
 
-This app allows users to upload up to 5 JSON personality result files
-(produced by the main WhatsApp analyzer app) and merge them into a single
-comprehensive personality profile summary.
+NEW in v2.0:
+- Comprehensive profile matrix with heatmap visualization
+- Statistical correlation analysis (Pearson & Spearman) with p-values
+- Rich emotional and topic-level insights
+- Natural language summary generation
+- Trait-behavior association analysis
+- Aggregated statistics with variability measures
+- Multiple export formats (JSON, CSV for matrix)
+- Enhanced UI with configurable controls
+
+This app merges up to 5 JSON personality profile files into a comprehensive
+fusion analysis with backward-compatible v1.0 output plus extensive v2.0 enhancements.
+
+Version: 2.0
 """
 
-import json
 from datetime import datetime, timezone
 
-import pandas as pd
 import streamlit as st
 
-
-def load_json_files(uploaded_files):
-    """
-    Load and parse JSON files from uploaded file objects.
-
-    Args:
-        uploaded_files: List of uploaded file objects from st.file_uploader
-
-    Returns:
-        List of parsed JSON dictionaries, skipping any files that fail to parse
-    """
-    data_list = []
-    for file in uploaded_files:
-        try:
-            # Reset file pointer to beginning
-            file.seek(0)
-            # Read and parse JSON
-            content = json.load(file)
-            data_list.append(content)
-        except json.JSONDecodeError as e:
-            st.error(f"❌ Failed to parse {file.name}: Invalid JSON format - {str(e)}")
-        except Exception as e:
-            st.error(f"❌ Error reading {file.name}: {str(e)}")
-    return data_list
-
-
-def merge_big_five(data_list):
-    """
-    Merge Big Five personality traits across multiple profiles.
-
-    Computes the average for each trait across all files that contain that trait.
-    If a trait is missing in some files, it's averaged only over files where it exists.
-
-    Args:
-        data_list: List of personality result dictionaries
-
-    Returns:
-        pandas DataFrame with columns ["trait", "average_score"] sorted by score descending
-    """
-    traits = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"]
-    trait_values = {trait: [] for trait in traits}
-
-    # Collect trait values from all files
-    for data in data_list:
-        personality_agg = data.get("personality_aggregation", {})
-        for trait in traits:
-            # Check if trait exists and has a numeric value
-            if trait in personality_agg:
-                value = personality_agg[trait]
-                # Handle both direct float values and dict with 'mean' key
-                if isinstance(value, dict):
-                    value = value.get("mean", value.get("value"))
-                if value is not None and isinstance(value, (int, float)):
-                    trait_values[trait].append(float(value))
-
-    # Compute averages
-    results = []
-    for trait, values in trait_values.items():
-        if values:  # Only include traits that have at least one value
-            avg_score = sum(values) / len(values)
-            results.append({"trait": trait, "average_score": round(avg_score, 3)})
-
-    # Sort by average score descending
-    results.sort(key=lambda x: x["average_score"], reverse=True)
-
-    return pd.DataFrame(results)
-
-
-def merge_emotions(data_list):
-    """
-    Merge emotion counts across multiple profiles.
-
-    Sums up the counts for each emotion type across all files.
-
-    Args:
-        data_list: List of personality result dictionaries
-
-    Returns:
-        pandas DataFrame with emotion names as index and counts as values,
-        sorted by count descending
-    """
-    emotion_totals = {}
-
-    # Combine emotion counts from all files
-    for data in data_list:
-        basic_metrics = data.get("basic_metrics", {})
-        emotion_counts = basic_metrics.get("dominant_emotion_counts", {})
-
-        for emotion, count in emotion_counts.items():
-            if isinstance(count, (int, float)):
-                emotion_totals[emotion] = emotion_totals.get(emotion, 0) + count
-
-    # Sort by count descending
-    sorted_emotions = dict(sorted(emotion_totals.items(), key=lambda x: x[1], reverse=True))
-
-    # Convert to DataFrame for bar chart
-    if sorted_emotions:
-        return pd.DataFrame.from_dict(sorted_emotions, orient="index", columns=["count"])
-    else:
-        return pd.DataFrame()
-
-
-def merge_mbti(data_list):
-    """
-    Merge MBTI type counts across multiple profiles.
-
-    Sums up the counts for each MBTI type across all files.
-    Handles both simple count format (e.g., {"INTJ": 5}) and 
-    nested dictionary format (e.g., {"INTJ": {"count": 5, ...}}).
-
-    Args:
-        data_list: List of personality result dictionaries
-
-    Returns:
-        pandas DataFrame with columns ["mbti_type", "count"] sorted by count descending
-    """
-    mbti_totals = {}
-
-    # Combine MBTI counts from all files
-    for data in data_list:
-        mbti_summary = data.get("mbti_summary", {})
-
-        for mbti_type, value in mbti_summary.items():
-            # Handle both formats:
-            # 1. Simple count: {"INTJ": 5}
-            # 2. Nested dict: {"INTJ": {"count": 5, "mean_reciprocity": 0.75, ...}}
-            count = None
-            
-            if isinstance(value, dict):
-                # Extract count from nested dictionary
-                count = value.get("count")
-            elif isinstance(value, (int, float)):
-                # Direct count value
-                count = value
-            
-            # Validate count is a positive number before adding
-            if isinstance(count, (int, float)) and count > 0:
-                mbti_totals[mbti_type] = mbti_totals.get(mbti_type, 0) + count
-
-    # Convert to list of dicts and sort by count descending
-    results = [{"mbti_type": mbti_type, "count": count} for mbti_type, count in mbti_totals.items()]
-    results.sort(key=lambda x: x["count"], reverse=True)
-
-    return pd.DataFrame(results)
-
-
-def create_merged_json(big_five_df, emotions_df, mbti_df):
-    """
-    Create a JSON export of the merged personality profile.
-
-    Args:
-        big_five_df: DataFrame with Big Five traits
-        emotions_df: DataFrame with emotion counts
-        mbti_df: DataFrame with MBTI counts
-
-    Returns:
-        JSON string of the merged profile
-    """
-    merged_data = {
-        "personality_aggregation": {},
-        "basic_metrics": {"dominant_emotion_counts": {}},
-        "mbti_summary": {},
-        "metadata": {
-            "merged_at": datetime.now(timezone.utc).isoformat(),
-            "merger_version": "1.0",
-        },
-    }
-
-    # Add Big Five data
-    if not big_five_df.empty:
-        for _, row in big_five_df.iterrows():
-            merged_data["personality_aggregation"][row["trait"]] = row["average_score"]
-
-    # Add emotion data
-    if not emotions_df.empty:
-        merged_data["basic_metrics"]["dominant_emotion_counts"] = emotions_df["count"].to_dict()
-
-    # Add MBTI data
-    if not mbti_df.empty:
-        for _, row in mbti_df.iterrows():
-            merged_data["mbti_summary"][row["mbti_type"]] = int(row["count"])
-
-    return json.dumps(merged_data, indent=2, ensure_ascii=False)
+# Import analysis modules
+from analysis import (
+    compute_aggregated_statistics,
+    compute_correlations,
+    create_profile_matrix,
+    generate_emotional_insights,
+    generate_natural_language_summary,
+    generate_topic_insights,
+    load_and_validate_json_files,
+    merge_all_data,
+    normalize_matrix,
+)
+from analysis.ui_components import (
+    create_merged_json_export,
+    display_correlation_table,
+    display_emotional_insights,
+    display_profile_matrix_heatmap,
+    display_topic_insights,
+    display_trait_behavior_summary,
+)
 
 
 def main():
-    """Main application logic."""
-    st.title("🔀 Personality Profile Merger")
+    """Main application logic with v2.0 enhancements."""
+    st.title("🔀 Personality Profile Fusion v2.0")
     st.write(
-        "Upload up to 5 personality result JSON files from the main analyzer "
-        "and merge them into a single comprehensive profile."
+        "Upload up to 5 personality result JSON files and create a comprehensive "
+        "fusion analysis with rich insights, correlations, and visualizations."
+    )
+
+    # Sidebar controls
+    st.sidebar.header("⚙️ Analysis Settings")
+
+    p_threshold = st.sidebar.slider(
+        "P-value threshold",
+        min_value=0.01,
+        max_value=0.10,
+        value=0.05,
+        step=0.01,
+        help="Statistical significance threshold for correlations",
+    )
+
+    normalization_method = st.sidebar.selectbox(
+        "Matrix normalization",
+        options=["none", "minmax", "zscore"],
+        index=0,
+        help="Normalization method for profile matrix (None, Min-Max, or Z-score)",
+    )
+
+    summary_format = st.sidebar.radio(
+        "Summary format",
+        options=["bullet", "paragraph"],
+        index=0,
+        help="Natural language summary format",
+    )
+
+    show_per_topic = st.sidebar.checkbox(
+        "Show per-topic analysis",
+        value=False,
+        help="Display topic-level insights (if available)",
     )
 
     # File uploader
@@ -214,24 +92,23 @@ def main():
     )
 
     if not uploaded_files:
-        st.info("👆 Please upload at least 2 JSON files to begin merging profiles.")
+        st.info("👆 Please upload at least 2 JSON files to begin fusion analysis.")
         return
 
     # Enforce maximum of 5 files
     if len(uploaded_files) > 5:
         st.warning(
-            f"⚠️ You uploaded {len(uploaded_files)} files, but only the first 5 will be processed. "
-            "The remaining files have been trimmed."
+            f"⚠️ You uploaded {len(uploaded_files)} files, but only the first 5 will be processed."
         )
         uploaded_files = uploaded_files[:5]
 
-    # Load JSON files
-    with st.spinner("Loading JSON files..."):
-        data_list = load_json_files(uploaded_files)
+    # Load and validate JSON files
+    with st.spinner("Loading and validating JSON files..."):
+        data_list, filenames = load_and_validate_json_files(uploaded_files)
 
     # Validation: require at least 2 valid files
     if len(data_list) < 2:
-        st.warning("⚠️ Please upload at least 2 files to merge profiles.")
+        st.warning("⚠️ Please upload at least 2 valid files to perform fusion analysis.")
         st.info(
             f"📊 Status: {len(data_list)} valid file(s) loaded out of {len(uploaded_files)} uploaded."
         )
@@ -239,112 +116,192 @@ def main():
 
     st.success(f"✅ Successfully loaded {len(data_list)} valid JSON file(s)")
 
-    # Merge sections
+    # Progress indicator
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    # Merge data
+    status_text.text("Merging personality data...")
+    progress_bar.progress(20)
+    merged_data = merge_all_data(data_list)
+    big_five_df = merged_data["big_five"]
+    emotions_df = merged_data["emotions"]
+    mbti_df = merged_data["mbti"]
+
+    # Compute aggregated statistics
+    status_text.text("Computing aggregated statistics...")
+    progress_bar.progress(40)
+    aggregated_stats = compute_aggregated_statistics(data_list)
+
+    # Create profile matrix
+    status_text.text("Creating personality profile matrix...")
+    progress_bar.progress(60)
+    profile_matrix = create_profile_matrix(data_list, filenames)
+    normalized_matrix = normalize_matrix(profile_matrix, method=normalization_method)
+
+    # Compute correlations
+    status_text.text("Analyzing correlations...")
+    progress_bar.progress(70)
+    correlations = compute_correlations(data_list, p_threshold=p_threshold)
+
+    # Generate insights
+    status_text.text("Generating insights...")
+    progress_bar.progress(85)
+    emotional_insights = generate_emotional_insights(data_list)
+    topic_insights = generate_topic_insights(data_list)
+
+    # Complete
+    progress_bar.progress(100)
+    status_text.text("Analysis complete!")
+
+    # Display results
     st.divider()
 
-    # Big Five Summary
-    st.subheader("🧠 Big Five Summary")
-    big_five_df = merge_big_five(data_list)
+    # === Basic Summaries (V1.0 Compatible) ===
+    st.header("📊 Basic Analysis")
 
-    if not big_five_df.empty:
-        st.dataframe(big_five_df, use_container_width=True, hide_index=True)
-        st.caption(
-            "Average personality trait scores across all uploaded profiles. "
-            "Scores range from 0 (low) to 1 (high)."
-        )
-    else:
-        st.info("No Big Five personality data found in the uploaded files.")
+    col1, col2 = st.columns(2)
 
-    # Emotion Summary
-    st.subheader("😊 Emotion Summary")
-    emotions_df = merge_emotions(data_list)
+    with col1:
+        st.subheader("🧠 Big Five Traits")
+        if not big_five_df.empty:
+            # Show mean and std
+            display_df = big_five_df[["trait", "mean", "std"]].copy()
+            display_df.columns = ["Trait", "Mean", "Std Dev"]
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No Big Five data found.")
 
+    with col2:
+        st.subheader("🔤 MBTI Distribution")
+        if not mbti_df.empty:
+            # Calculate percentages
+            total_count = mbti_df["count"].sum()
+            mbti_display = mbti_df.copy()
+            mbti_display["percentage"] = (mbti_display["count"] / total_count * 100).round(2)
+            st.dataframe(
+                mbti_display[["mbti_type", "count", "percentage"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info("No MBTI data found.")
+
+    # Emotions
+    st.subheader("😊 Emotion Distribution")
     if not emotions_df.empty:
-        st.bar_chart(emotions_df, use_container_width=True)
-        st.caption(
-            f"Combined emotion frequencies across {len(data_list)} profile(s). "
-            "Higher bars indicate more frequent emotional expressions."
-        )
+        st.bar_chart(emotions_df["count"], use_container_width=True)
+        st.caption(f"Combined emotion frequencies across {len(data_list)} profile(s).")
     else:
-        st.info("No emotion data found in the uploaded files.")
+        st.info("No emotion data found.")
 
-    # MBTI Overview
-    st.subheader("🔤 MBTI Overview")
-    mbti_df = merge_mbti(data_list)
-
-    if not mbti_df.empty:
-        st.dataframe(mbti_df, use_container_width=True, hide_index=True)
-        st.caption(
-            "Distribution of MBTI personality types across all conversations in the merged profiles."
-        )
-    else:
-        st.info("No MBTI data found in the uploaded files.")
-
-    # Final Personality Insight
     st.divider()
-    st.subheader("💡 Final Personality Insight")
 
-    # Determine dominant trait and emotion
-    dominant_trait = None
-    dominant_trait_score = None
-    if not big_five_df.empty:
-        dominant_trait = big_five_df.iloc[0]["trait"]
-        dominant_trait_score = big_five_df.iloc[0]["average_score"]
+    # === V2.0 Enhanced Features ===
+    st.header("🚀 Advanced Analysis (v2.0)")
 
-    dominant_emotion = None
-    dominant_emotion_count = None
-    if not emotions_df.empty:
-        dominant_emotion = emotions_df.index[0]
-        dominant_emotion_count = int(emotions_df.iloc[0]["count"])
+    # Profile Matrix
+    with st.expander("🎨 Personality Profile Matrix", expanded=True):
+        display_profile_matrix_heatmap(normalized_matrix)
 
-    # Generate summary text
-    summary_parts = []
-    summary_parts.append(
-        f"**Analysis Summary:** Across **{len(data_list)}** uploaded personality profile(s):"
+    # Aggregated Statistics
+    with st.expander("📈 Aggregated Statistics", expanded=False):
+        st.write("**Behavioral Metrics:**")
+        if aggregated_stats["reciprocity"]["mean"] is not None:
+            st.metric(
+                "Mean Reciprocity",
+                f"{aggregated_stats['reciprocity']['mean']:.4f}",
+                delta=f"± {aggregated_stats['reciprocity'].get('std', 0):.4f}",
+            )
+        if aggregated_stats["response_time"]["mean"] is not None:
+            st.metric(
+                "Mean Response Time",
+                f"{aggregated_stats['response_time']['mean']:.2f}s",
+                delta=f"± {aggregated_stats['response_time'].get('std', 0):.2f}",
+            )
+
+        st.write("**Top 3 Emotions Overall:**")
+        for i, emotion_info in enumerate(aggregated_stats.get("top_emotions", []), 1):
+            st.write(
+                f"{i}. {emotion_info['emotion'].capitalize()}: {emotion_info['count']} occurrences"
+            )
+
+    # Correlation Analysis
+    with st.expander("🔗 Correlation Analysis", expanded=True):
+        display_correlation_table(correlations, p_threshold)
+        display_trait_behavior_summary(correlations.get("trait_behavior_summary", {}))
+
+    # Emotional Insights
+    with st.expander("😊 Emotional Patterns", expanded=False):
+        display_emotional_insights(emotional_insights)
+
+    # Topic Insights
+    if show_per_topic:
+        with st.expander("📊 Topic-Level Insights", expanded=False):
+            display_topic_insights(topic_insights)
+
+    # Natural Language Summary
+    st.divider()
+    st.header("💬 Natural Language Summary")
+    summary = generate_natural_language_summary(
+        aggregated_stats=aggregated_stats,
+        correlations=correlations,
+        emotional_insights=emotional_insights,
+        topic_insights=topic_insights,
+        num_files=len(data_list),
+        format_style=summary_format,
     )
+    st.markdown(summary)
 
-    if dominant_trait and dominant_trait_score is not None:
-        summary_parts.append(
-            f"- The most prominent Big Five personality trait is **{dominant_trait.capitalize()}** "
-            f"with an average score of **{dominant_trait_score}**."
-        )
-
-    if dominant_emotion and dominant_emotion_count is not None:
-        summary_parts.append(
-            f"- The most frequently expressed emotion is **{dominant_emotion.capitalize()}** "
-            f"with a total count of **{dominant_emotion_count}**."
-        )
-
-    if not mbti_df.empty:
-        top_mbti = mbti_df.iloc[0]["mbti_type"]
-        top_mbti_count = int(mbti_df.iloc[0]["count"])
-        summary_parts.append(
-            f"- The dominant MBTI type is **{top_mbti}** with **{top_mbti_count}** occurrence(s)."
-        )
-
-    if len(summary_parts) > 1:
-        st.markdown("\n".join(summary_parts))
-    else:
-        st.info("Not enough data to generate a comprehensive summary.")
-
-    # Download merged result
+    # Download Section
     st.divider()
-    st.subheader("💾 Download Merged Profile")
+    st.header("💾 Download Results")
 
-    merged_json = create_merged_json(big_five_df, emotions_df, mbti_df)
+    col1, col2, col3 = st.columns(3)
+
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"merged_personality_{timestamp}.json"
 
-    st.download_button(
-        label="📥 Download Merged Profile (JSON)",
-        data=merged_json,
-        file_name=filename,
-        mime="application/json",
-        help="Download the merged personality profile as a JSON file",
-    )
-    st.caption(
-        "Download the combined analysis data for archival, comparison, or further processing."
-    )
+    # Comprehensive JSON export
+    with col1:
+        merged_json = create_merged_json_export(
+            big_five_df,
+            emotions_df,
+            mbti_df,
+            normalized_matrix,
+            aggregated_stats,
+            correlations,
+            emotional_insights,
+            topic_insights,
+        )
+        st.download_button(
+            label="📥 Full Analysis (JSON)",
+            data=merged_json,
+            file_name=f"personality_fusion_{timestamp}.json",
+            mime="application/json",
+            help="Comprehensive analysis with v1.0 backward compatibility + v2.0 enhancements",
+        )
+
+    # Profile matrix CSV
+    with col2:
+        if not normalized_matrix.empty:
+            matrix_csv = normalized_matrix.to_csv(index=True)
+            st.download_button(
+                label="📊 Profile Matrix (CSV)",
+                data=matrix_csv,
+                file_name=f"profile_matrix_{timestamp}.csv",
+                mime="text/csv",
+                help="Personality profile matrix in CSV format",
+            )
+
+    # Summary text
+    with col3:
+        st.download_button(
+            label="📝 Summary (TXT)",
+            data=summary,
+            file_name=f"personality_summary_{timestamp}.txt",
+            mime="text/plain",
+            help="Natural language summary as text file",
+        )
 
 
 if __name__ == "__main__":
