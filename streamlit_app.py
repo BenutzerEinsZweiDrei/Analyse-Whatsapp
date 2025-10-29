@@ -3,6 +3,8 @@ WhatsApp Conversation Analyzer - Streamlit UI
 
 This is the main Streamlit application entry point.
 All core logic has been moved to the app/ package.
+
+Updated to support per-file analysis, per-file personality profiles, and merge functionality.
 """
 
 import importlib
@@ -16,7 +18,7 @@ import streamlit as st
 
 # Import from app package
 from app.config import get_settings, mask_key
-from app.core.local_profile import run_local_analysis
+from app.core.local_profile import merge_local_profiles, run_local_analysis
 from app.core.preprocessing import init_nltk
 from app.core.summarizer import summarize_matrix
 from app.logging_config import configure_logging, get_logs, set_debug_mode
@@ -47,15 +49,13 @@ settings = get_settings()
 
 st.title("WhatsApp Conversation Analyzer")
 
-# Initialize session state for persistence across reruns
-if "analysis_done" not in st.session_state:
-    st.session_state.analysis_done = False
-    st.session_state.matrix = None
-    st.session_state.summary = None
-    st.session_state.conversation_messages = None
-    st.session_state.file_content = None
+# Initialize session state for per-file tracking
+if "files" not in st.session_state:
+    st.session_state.files = []  # List of file dicts
+if "merged_profiles" not in st.session_state:
+    st.session_state.merged_profiles = None
+if "username" not in st.session_state:
     st.session_state.username = ""
-    st.session_state.uploaded_files_metadata = []
 
 # Debug toggle in UI
 debug_mode = st.checkbox("Enable debug mode (show logs and detailed info)", value=False)
@@ -111,52 +111,49 @@ if debug_mode:
 st.info(
     "📋 **How to get started:**\n"
     "1. Export your WhatsApp chat (Settings → Export chat → Without media)\n"
-    "2. Upload 1-5 .txt files below (you can merge multiple exports)\n"
+    "2. Upload 1-5 .txt files below\n"
     "3. Enter the username you want to analyze (as it appears in the chat)\n"
-    "4. Click 'Start Analysis' to begin processing"
+    "4. Click 'Upload Files' to begin"
 )
 
-with st.form("analysis_form"):
+with st.form("upload_form"):
     uploaded_files = st.file_uploader(
         "Upload your whatsapp.txt file(s)",
         type=["txt"],
         accept_multiple_files=True,
-        help="Upload 1-5 WhatsApp chat export files. Multiple files will be merged automatically.",
+        help="Upload 1-5 WhatsApp chat export files.",
     )
     st.caption("Upload one or more exported WhatsApp chat files in .txt format (max 5 files)")
 
-    username = st.text_input("Enter the username to analyze")
+    username = st.text_input("Enter the username to analyze", value=st.session_state.username)
     st.caption("Enter the exact username as it appears in the chat messages")
 
-    submit_analysis = st.form_submit_button("Start Analysis")
-    st.caption("⏱️ Analysis typically takes 30-60 seconds depending on chat size")
+    submit_upload = st.form_submit_button("Upload Files")
 
-if submit_analysis:
+if submit_upload:
     try:
         if not uploaded_files:
             st.error("Please upload at least one whatsapp.txt file.")
-            logger.warning("Start Analysis pressed but no files uploaded.")
+            logger.warning("Upload pressed but no files uploaded.")
         elif len(uploaded_files) > 5:
             st.error("Please upload a maximum of 5 files.")
             logger.warning(f"Too many files uploaded: {len(uploaded_files)}")
         elif not username.strip():
             st.error("Please enter a username.")
-            logger.warning("Start Analysis pressed but username is empty.")
+            logger.warning("Upload pressed but username is empty.")
         else:
-            # Process all uploaded files
-            file_contents = []
-            file_metadata = []
-            total_size = 0
+            # Clear previous session state
+            st.session_state.files = []
+            st.session_state.merged_profiles = None
+            st.session_state.username = username.strip()
 
-            st.info(f"📁 Processing {len(uploaded_files)} file(s)...")
-
-            for idx, uploaded_file in enumerate(uploaded_files, 1):
+            # Process uploaded files
+            for idx, uploaded_file in enumerate(uploaded_files):
                 file_bytes = uploaded_file.read()
                 file_size = len(file_bytes)
-                total_size += file_size
-                filename = getattr(uploaded_file, "name", f"file_{idx}.txt")
+                filename = getattr(uploaded_file, "name", f"file_{idx+1}.txt")
 
-                logger.info(f"File {idx}/{len(uploaded_files)}: filename={filename}, size={file_size} bytes")
+                logger.info(f"File {idx+1}/{len(uploaded_files)}: filename={filename}, size={file_size} bytes")
 
                 # Try to decode with utf-8 first, fallback to latin-1
                 decode_used = "utf-8"
@@ -172,272 +169,473 @@ if submit_analysis:
                             f"Could not decode file '{filename}'. Please provide a UTF-8 encoded text file."
                         )
                         logger.exception(f"Failed to decode file '{filename}': {e}")
-                        raise
+                        continue
 
-                file_contents.append(file_content)
-                file_metadata.append({
+                # Create file state object
+                file_state = {
                     "filename": filename,
                     "file_size_bytes": file_size,
                     "decode_used": decode_used,
-                })
+                    "content": file_content,
+                    "analysis": None,
+                    "analysis_status": "queued",  # queued, running, success, error
+                    "analysis_time": 0.0,
+                    "analysis_error": None,
+                    "local_profile": {
+                        "results": None,
+                        "profile_text": None,
+                        "status": "none",  # none, running, success, error
+                        "error": None,
+                    },
+                    "ai_profile": {
+                        "response": None,
+                        "status": "none",
+                        "error": None,
+                    },
+                }
 
-                st.caption(f"✅ {filename}: {file_size:,} bytes ({decode_used})")
+                st.session_state.files.append(file_state)
+                logger.info(f"Added file '{filename}' to session state")
 
-            logger.info(f"All files decoded successfully. Total size: {total_size:,} bytes")
+            st.success(f"✅ Uploaded {len(st.session_state.files)} file(s). Ready for analysis!")
+            st.rerun()
 
-            # Run analysis
-            with st.spinner("Analyzing conversations... This may take a while."):
-                total_start = time.time()
-
-                # Use cached analysis function from app.run_analysis
-                # Pass list of contents for multi-file or single string for single file (backward compatible)
-                if len(file_contents) == 1:
-                    # Single file - use original behavior
-                    matrix, conversation_messages = cached_run_analysis(
-                        file_contents[0], username.strip()
-                    )
-                else:
-                    # Multiple files - use new merge behavior
-                    matrix, conversation_messages = cached_run_analysis(
-                        file_contents, username.strip(), file_metadata
-                    )
-
-                # Summarize results
-                summary = summarize_matrix(matrix)
-
-                total_time = time.time() - total_start
-                logger.info(f"Full analysis completed in {total_time:.2f}s")
-
-            # Store results in session state
-            st.session_state.matrix = matrix
-            st.session_state.summary = summary
-            st.session_state.conversation_messages = conversation_messages
-            st.session_state.file_content = file_contents if len(file_contents) > 1 else file_contents[0]
-            st.session_state.username = username.strip()
-            st.session_state.analysis_done = True
-            st.session_state.file_size = total_size
-            st.session_state.total_time = total_time
-            st.session_state.uploaded_files_metadata = file_metadata
-
-            st.success(f"✅ Analysis completed! Processed {len(uploaded_files)} file(s).")
-
-    except Exception as main_e:
-        logger.exception(f"Unhandled exception during analysis: {main_e}")
-        st.error(f"An unexpected error occurred: {main_e}")
+    except Exception as e:
+        logger.exception(f"Error during file upload: {e}")
+        st.error(f"An error occurred: {e}")
         if debug_mode:
-            st.exception(main_e)
+            st.exception(e)
 
-# Display results if analysis has been done
-if st.session_state.analysis_done:
-    summary = st.session_state.summary
-    matrix = st.session_state.matrix
-    file_size = st.session_state.get("file_size", 0)
-    total_time = st.session_state.get("total_time", 0)
+# ---------------------------
+# Display Per-File Cards and Actions
+# ---------------------------
 
-    # Summary section
-    st.subheader("Summary")
-    st.write(
-        f"**Positive Topics ({len(summary['positive_topics'])}):** {', '.join(summary['positive_topics'])}"
-    )
-    st.write(
-        f"**Negative Topics ({len(summary['negative_topics'])}):** {', '.join(summary['negative_topics'])}"
-    )
-    st.write(f"**Emotional Variability:** {summary['emotion_variability']:.3f}")
-
-    # Analysis summary
-    st.subheader("Analysis Summary")
-    st.json(summary["analysis"])
-
-    # Download debug info button
-    debug_info = {
-        "summary": {
-            "positive_topics": summary["positive_topics"],
-            "negative_topics": summary["negative_topics"],
-            "emotion_variability": summary["emotion_variability"],
-        },
-        "analysis": summary["analysis"],
-        "matrix": summary["matrix"],
-        "metadata": {
-            "username": st.session_state.username,
-            "file_size_bytes": file_size,
-            "total_conversations": len(summary["matrix"]),
-            "analysis_time_seconds": total_time,
-            "uploaded_files": st.session_state.get("uploaded_files_metadata", []),
-        },
-    }
-    debug_json = json.dumps(debug_info, ensure_ascii=False, indent=2)
-    st.download_button(
-        label="Download Complete Analysis (Debug Info)",
-        data=debug_json,
-        file_name="whatsapp_analysis_debug.json",
-        mime="application/json",
-        key="download_debug_info",
-    )
-    st.caption("💾 Download complete analysis data including all metrics and metadata for debugging")
-
-    # Profile generation options
+if st.session_state.files:
     st.divider()
-    st.subheader("🧠 Psychological Profile Generation")
-    st.info(
-        "**Choose a profile generation method:**\n\n"
-        "🔒 **Local Profile** (Recommended): Generates a comprehensive psychological profile "
-        "using local algorithms. All processing happens on your device - no data is sent to external servers. "
-        "Includes Big Five personality traits, MBTI analysis, emotion insights, and detailed metrics.\n\n"
-        "🤖 **AI Profile**: Uses artificial intelligence to generate a natural language profile summary. "
-        "Requires internet connection and may send data to external AI services. Results may vary."
-    )
+    st.subheader("📁 Uploaded Files")
 
-    # Local psychological profile generation button
-    if st.button("Generate Local Psychological Profile", key="generate_local"):
-        with st.spinner("Generating local profile..."):
+    # Bulk actions
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if st.button("🔄 Analyze All Files", key="analyze_all"):
+            for file_state in st.session_state.files:
+                if file_state["analysis_status"] not in ["success"]:
+                    file_state["analysis_status"] = "queued"
+            st.rerun()
+    
+    with col2:
+        # Count analyzed files without local profiles
+        analyzed_without_local = sum(
+            1 for f in st.session_state.files
+            if f["analysis_status"] == "success" and f["local_profile"]["status"] != "success"
+        )
+        if st.button(
+            f"🧠 Generate Local Profiles for All ({analyzed_without_local})",
+            key="generate_local_all",
+            disabled=analyzed_without_local == 0
+        ):
+            for file_state in st.session_state.files:
+                if (file_state["analysis_status"] == "success" and 
+                    file_state["local_profile"]["status"] != "success"):
+                    file_state["local_profile"]["status"] = "queued"
+            st.rerun()
+    
+    with col3:
+        # Count analyzed files without AI profiles
+        analyzed_without_ai = sum(
+            1 for f in st.session_state.files
+            if f["analysis_status"] == "success" and f["ai_profile"]["status"] != "success"
+        )
+        if st.button(
+            f"🤖 Generate AI Profiles for All ({analyzed_without_ai})",
+            key="generate_ai_all",
+            disabled=analyzed_without_ai == 0
+        ):
+            for file_state in st.session_state.files:
+                if (file_state["analysis_status"] == "success" and 
+                    file_state["ai_profile"]["status"] != "success"):
+                    file_state["ai_profile"]["status"] = "queued"
+            st.rerun()
+    
+    with col4:
+        # Count files with local profiles
+        files_with_local = sum(
+            1 for f in st.session_state.files
+            if f["local_profile"]["status"] == "success"
+        )
+        if st.button(
+            f"🔀 Merge Personality Profiles ({files_with_local})",
+            key="merge_profiles",
+            disabled=files_with_local < 2
+        ):
+            st.session_state.merge_requested = True
+            st.rerun()
+
+    st.caption("Use bulk actions to process multiple files at once")
+
+    # Process queued analyses
+    for file_state in st.session_state.files:
+        if file_state["analysis_status"] == "queued":
+            file_state["analysis_status"] = "running"
             try:
-                logger.info("Starting local profile generation")
-
-                # Call local analysis pipeline from app.core.local_profile
-                results, profile_text = run_local_analysis(
-                    st.session_state.summary, st.session_state.matrix
-                )
-
-                # Display profile
-                st.markdown(profile_text)
-
-                # Show detailed results in expander
-                with st.expander("View Detailed Analysis Results (JSON)", expanded=False):
-                    st.json(
-                        {
-                            "basic_metrics": results.get("basic_metrics", {}),
-                            "big_five_aggregation": results.get("big_five_aggregation", {}),
-                            "emotion_insights": results.get("emotion_insights", {}),
-                            "topics_summary": results.get("topics_summary", {}),
-                            "mbti_summary": results.get("mbti_summary", {}),
-                        }
+                with st.spinner(f"Analyzing {file_state['filename']}..."):
+                    start_time = time.time()
+                    
+                    # Run analysis for single file
+                    matrix, conversation_messages = cached_run_analysis(
+                        file_state["content"],
+                        st.session_state.username
                     )
-
-                # Download buttons
-                st.subheader("Download Results")
-                st.caption(
-                    "Export your analysis results in different formats for further analysis or record keeping"
-                )
-
-                if "exports" in results and "metrics_json" in results["exports"]:
-                    st.download_button(
-                        label="📥 Download Complete Analysis (JSON)",
-                        data=results["exports"]["metrics_json"],
-                        file_name="analysis_local_results.json",
-                        mime="application/json",
-                        key="download_local_json",
-                    )
-                    st.caption("Complete analysis with all metrics, personality traits, and aggregated data")
-
-                if "exports" in results and "per_conversation_csv" in results["exports"]:
-                    st.download_button(
-                        label="📥 Download Per-Conversation Data (CSV)",
-                        data=results["exports"]["per_conversation_csv"],
-                        file_name="per_conversation.csv",
-                        mime="text/csv",
-                        key="download_local_csv",
-                    )
-                    st.caption("Individual conversation metrics in spreadsheet format - great for custom analysis")
-
-                if "exports" in results and "flagged_json" in results["exports"]:
-                    flagged_data = results["exports"]["flagged_json"]
-                    if flagged_data and flagged_data != "[]":
-                        st.download_button(
-                            label="📥 Download Flagged Conversations (JSON)",
-                            data=flagged_data,
-                            file_name="flagged_conversations.json",
-                            mime="application/json",
-                            key="download_flagged_json",
-                        )
-                        st.caption("Conversations with unusual emotional patterns or outlier metrics")
-
-                logger.info("Local profile generation completed successfully")
-
+                    
+                    # Summarize results
+                    summary = summarize_matrix(matrix)
+                    
+                    analysis_time = time.time() - start_time
+                    
+                    # Store results
+                    file_state["analysis"] = {
+                        "matrix": matrix,
+                        "summary": summary,
+                        "conversation_messages": conversation_messages,
+                    }
+                    file_state["analysis_status"] = "success"
+                    file_state["analysis_time"] = analysis_time
+                    
+                    logger.info(f"Analysis completed for '{file_state['filename']}' in {analysis_time:.2f}s")
+                    
             except Exception as e:
-                logger.exception(f"Error generating local profile: {e}")
-                st.error(
-                    f"⚠️ Local Profile Generation Failed\n\n"
-                    f"An error occurred while generating the local psychological profile:\n"
-                    f"{str(e)}\n\n"
-                    f"Please check the analysis data and try again."
-                )
-                if debug_mode:
-                    st.exception(e)
+                logger.exception(f"Error analyzing '{file_state['filename']}': {e}")
+                file_state["analysis_status"] = "error"
+                file_state["analysis_error"] = str(e)
+            
+            st.rerun()
 
-    # AI profile generation button
-    if st.button("Generate Psychological Profile with AI", key="generate_ai"):
-        with st.spinner("Generating AI profile..."):
-            st.subheader("AI-Generated Psychological Profile")
-
+    # Process queued local profiles
+    for file_state in st.session_state.files:
+        if file_state["local_profile"]["status"] == "queued":
+            file_state["local_profile"]["status"] = "running"
             try:
-                logger.debug("Sending prompt to g4f model")
+                with st.spinner(f"Generating local profile for {file_state['filename']}..."):
+                    summary = file_state["analysis"]["summary"]
+                    matrix = file_state["analysis"]["matrix"]
+                    
+                    results, profile_text = run_local_analysis(summary, matrix)
+                    
+                    file_state["local_profile"]["results"] = results
+                    file_state["local_profile"]["profile_text"] = profile_text
+                    file_state["local_profile"]["status"] = "success"
+                    
+                    logger.info(f"Local profile generated for '{file_state['filename']}'")
+                    
+            except Exception as e:
+                logger.exception(f"Error generating local profile for '{file_state['filename']}': {e}")
+                file_state["local_profile"]["status"] = "error"
+                file_state["local_profile"]["error"] = str(e)
+            
+            st.rerun()
 
-                # Generate profile using app.services.g4f_client
-                response = generate_profile(st.session_state.summary["analysis"])
+    # Process queued AI profiles
+    for file_state in st.session_state.files:
+        if file_state["ai_profile"]["status"] == "queued":
+            file_state["ai_profile"]["status"] = "running"
+            try:
+                with st.spinner(f"Generating AI profile for {file_state['filename']}..."):
+                    response = generate_profile(file_state["analysis"]["summary"]["analysis"])
+                    
+                    file_state["ai_profile"]["response"] = response
+                    file_state["ai_profile"]["status"] = "success"
+                    
+                    logger.info(f"AI profile generated for '{file_state['filename']}'")
+                    
+            except Exception as e:
+                logger.exception(f"Error generating AI profile for '{file_state['filename']}': {e}")
+                file_state["ai_profile"]["status"] = "error"
+                file_state["ai_profile"]["error"] = handle_g4f_error(e)
+            
+            st.rerun()
 
-                if response:
-                    logger.debug(f"g4f response type: {type(response)}")
-                    st.write(response)
+    # Handle merge request
+    if st.session_state.get("merge_requested", False):
+        st.session_state.merge_requested = False
+        
+        try:
+            with st.spinner("Merging personality profiles..."):
+                # Collect profiles to merge
+                profiles_to_merge = []
+                for file_state in st.session_state.files:
+                    if file_state["local_profile"]["status"] == "success":
+                        profiles_to_merge.append((
+                            file_state["local_profile"]["results"],
+                            file_state["local_profile"]["profile_text"],
+                            file_state["filename"]
+                        ))
+                
+                if len(profiles_to_merge) >= 1:
+                    merged_results, merged_text = merge_local_profiles(profiles_to_merge)
+                    
+                    st.session_state.merged_profiles = {
+                        "results": merged_results,
+                        "profile_text": merged_text,
+                        "merged_from": [f[2] for f in profiles_to_merge],
+                    }
+                    
+                    logger.info(f"Merged {len(profiles_to_merge)} profiles")
+                    st.success(f"✅ Merged {len(profiles_to_merge)} profiles successfully!")
                 else:
-                    logger.error("No response content generated from g4f")
-                    st.warning(
-                        "⚠️ No AI Profile Generated\n\n"
-                        "The AI service responded but did not generate any content. "
-                        "Please try again or review the detailed analysis data above."
+                    st.error("Need at least 1 profile to merge.")
+                    
+        except Exception as e:
+            logger.exception(f"Error merging profiles: {e}")
+            st.error(f"Failed to merge profiles: {e}")
+            if debug_mode:
+                st.exception(e)
+        
+        st.rerun()
+
+    # Display per-file cards
+    for idx, file_state in enumerate(st.session_state.files):
+        with st.container():
+            st.markdown("---")
+            
+            # File header
+            col_header, col_status = st.columns([3, 1])
+            with col_header:
+                st.markdown(f"### 📄 {file_state['filename']}")
+                st.caption(f"Size: {file_state['file_size_bytes']:,} bytes • Encoding: {file_state['decode_used']}")
+            
+            with col_status:
+                status = file_state["analysis_status"]
+                if status == "queued":
+                    st.info("⏳ Queued")
+                elif status == "running":
+                    st.warning("🔄 Running...")
+                elif status == "success":
+                    st.success("✅ Analyzed")
+                elif status == "error":
+                    st.error("❌ Error")
+            
+            # Analysis actions
+            col_actions1, col_actions2, col_actions3 = st.columns(3)
+            
+            with col_actions1:
+                if file_state["analysis_status"] not in ["running"]:
+                    if st.button(
+                        "Start Analysis" if file_state["analysis_status"] != "success" else "Re-analyze",
+                        key=f"analyze_{idx}"
+                    ):
+                        file_state["analysis_status"] = "queued"
+                        st.rerun()
+            
+            # Show analysis results if successful
+            if file_state["analysis_status"] == "success":
+                summary = file_state["analysis"]["summary"]
+                
+                # Brief summary
+                st.markdown("**Analysis Summary:**")
+                col_metrics1, col_metrics2, col_metrics3 = st.columns(3)
+                with col_metrics1:
+                    st.metric("Positive Topics", len(summary["positive_topics"]))
+                with col_metrics2:
+                    st.metric("Negative Topics", len(summary["negative_topics"]))
+                with col_metrics3:
+                    st.metric("Emotion Var.", f"{summary['emotion_variability']:.3f}")
+                
+                # Detailed view toggle
+                with st.expander(f"📊 View Full Analysis for {file_state['filename']}"):
+                    st.write(f"**Positive Topics:** {', '.join(summary['positive_topics']) or 'None'}")
+                    st.write(f"**Negative Topics:** {', '.join(summary['negative_topics']) or 'None'}")
+                    st.json(summary["analysis"])
+                    
+                    # Download button for this file's analysis
+                    debug_info = {
+                        "filename": file_state["filename"],
+                        "summary": summary,
+                        "analysis_time": file_state["analysis_time"],
+                    }
+                    debug_json = json.dumps(debug_info, ensure_ascii=False, indent=2)
+                    st.download_button(
+                        label="Download Analysis JSON",
+                        data=debug_json,
+                        file_name=f"analysis_{file_state['filename']}.json",
+                        mime="application/json",
+                        key=f"download_analysis_{idx}",
                     )
-
-            except Exception as e:
-                # Use error handler from app.services.g4f_client
-                error_message = handle_g4f_error(e)
-                st.error(
-                    f"⚠️ AI Profile Generation Unavailable\n\n"
-                    f"{error_message}\n\n"
-                    f"You can still download and review the detailed analysis data above."
-                )
+                
+                # Profile generation buttons
+                st.markdown("**Profile Generation:**")
+                col_profile1, col_profile2 = st.columns(2)
+                
+                with col_profile1:
+                    local_status = file_state["local_profile"]["status"]
+                    if local_status == "none":
+                        if st.button(f"🧠 Generate Local Profile", key=f"local_{idx}"):
+                            file_state["local_profile"]["status"] = "queued"
+                            st.rerun()
+                    elif local_status == "running":
+                        st.info("⏳ Generating...")
+                    elif local_status == "success":
+                        st.success("✅ Local Profile Ready")
+                        if st.button(f"📖 View Local Profile", key=f"view_local_{idx}"):
+                            st.session_state[f"show_local_{idx}"] = True
+                            st.rerun()
+                    elif local_status == "error":
+                        st.error(f"❌ Error")
+                        if st.button(f"🔄 Retry", key=f"retry_local_{idx}"):
+                            file_state["local_profile"]["status"] = "queued"
+                            st.rerun()
+                
+                with col_profile2:
+                    ai_status = file_state["ai_profile"]["status"]
+                    if ai_status == "none":
+                        if st.button(f"🤖 Generate AI Profile", key=f"ai_{idx}"):
+                            file_state["ai_profile"]["status"] = "queued"
+                            st.rerun()
+                    elif ai_status == "running":
+                        st.info("⏳ Generating...")
+                    elif ai_status == "success":
+                        st.success("✅ AI Profile Ready")
+                        if st.button(f"📖 View AI Profile", key=f"view_ai_{idx}"):
+                            st.session_state[f"show_ai_{idx}"] = True
+                            st.rerun()
+                    elif ai_status == "error":
+                        st.error(f"❌ Error")
+                        if st.button(f"🔄 Retry", key=f"retry_ai_{idx}"):
+                            file_state["ai_profile"]["status"] = "queued"
+                            st.rerun()
+                
+                # Display local profile if requested
+                if st.session_state.get(f"show_local_{idx}", False):
+                    with st.expander(f"🧠 Local Profile: {file_state['filename']}", expanded=True):
+                        if file_state["local_profile"]["profile_text"]:
+                            st.markdown(file_state["local_profile"]["profile_text"])
+                            
+                            # Download buttons for exports
+                            results = file_state["local_profile"]["results"]
+                            if "exports" in results:
+                                col_dl1, col_dl2, col_dl3 = st.columns(3)
+                                
+                                with col_dl1:
+                                    if "metrics_json" in results["exports"]:
+                                        st.download_button(
+                                            label="📥 JSON",
+                                            data=results["exports"]["metrics_json"],
+                                            file_name=f"local_profile_{file_state['filename']}.json",
+                                            mime="application/json",
+                                            key=f"dl_json_{idx}",
+                                        )
+                                
+                                with col_dl2:
+                                    if "per_conversation_csv" in results["exports"]:
+                                        st.download_button(
+                                            label="📥 CSV",
+                                            data=results["exports"]["per_conversation_csv"],
+                                            file_name=f"conversations_{file_state['filename']}.csv",
+                                            mime="text/csv",
+                                            key=f"dl_csv_{idx}",
+                                        )
+                                
+                                with col_dl3:
+                                    if "flagged_json" in results["exports"]:
+                                        flagged_data = results["exports"]["flagged_json"]
+                                        if flagged_data and flagged_data != "[]":
+                                            st.download_button(
+                                                label="📥 Flagged",
+                                                data=flagged_data,
+                                                file_name=f"flagged_{file_state['filename']}.json",
+                                                mime="application/json",
+                                                key=f"dl_flagged_{idx}",
+                                            )
+                        
+                        if st.button("❌ Close", key=f"close_local_{idx}"):
+                            st.session_state[f"show_local_{idx}"] = False
+                            st.rerun()
+                
+                # Display AI profile if requested
+                if st.session_state.get(f"show_ai_{idx}", False):
+                    with st.expander(f"🤖 AI Profile: {file_state['filename']}", expanded=True):
+                        if file_state["ai_profile"]["response"]:
+                            st.write(file_state["ai_profile"]["response"])
+                        
+                        if st.button("❌ Close", key=f"close_ai_{idx}"):
+                            st.session_state[f"show_ai_{idx}"] = False
+                            st.rerun()
+            
+            elif file_state["analysis_status"] == "error":
+                st.error(f"**Error:** {file_state.get('analysis_error', 'Unknown error')}")
                 if debug_mode:
-                    st.exception(e)
+                    st.code(file_state.get('analysis_error', 'No details'))
 
-    # Detailed conversation matrix
+    # Display merged profile if available
+    if st.session_state.merged_profiles:
+        st.divider()
+        st.subheader("🔀 Merged Personality Profile")
+        
+        merged = st.session_state.merged_profiles
+        st.info(f"Merged from {len(merged['merged_from'])} file(s): {', '.join(merged['merged_from'])}")
+        
+        with st.expander("📖 View Merged Profile", expanded=True):
+            st.markdown(merged["profile_text"])
+            
+            # Download buttons for merged exports
+            results = merged["results"]
+            if "exports" in results:
+                col_merge1, col_merge2, col_merge3 = st.columns(3)
+                
+                with col_merge1:
+                    if "metrics_json" in results["exports"]:
+                        st.download_button(
+                            label="📥 Download Merged JSON",
+                            data=results["exports"]["metrics_json"],
+                            file_name="merged_personality_profile.json",
+                            mime="application/json",
+                            key="dl_merged_json",
+                        )
+                
+                with col_merge2:
+                    if "per_conversation_csv" in results["exports"]:
+                        st.download_button(
+                            label="📥 Download Merged CSV",
+                            data=results["exports"]["per_conversation_csv"],
+                            file_name="merged_conversations.csv",
+                            mime="text/csv",
+                            key="dl_merged_csv",
+                        )
+                
+                with col_merge3:
+                    if "flagged_json" in results["exports"]:
+                        flagged_data = results["exports"]["flagged_json"]
+                        if flagged_data and flagged_data != "[]":
+                            st.download_button(
+                                label="📥 Download Merged Flagged",
+                                data=flagged_data,
+                                file_name="merged_flagged.json",
+                                mime="application/json",
+                                key="dl_merged_flagged",
+                            )
+
+# Show logs in debug mode
+if debug_mode:
     st.divider()
-    st.subheader("Detailed Conversation Matrix")
-    st.caption(
-        "Raw analysis data showing metrics for each conversation: sentiment scores, "
-        "personality traits (Big Five), MBTI indicators, emotions, topics, and response times"
-    )
-    st.json(summary["matrix"])
-
-    # Download matrix JSON
-    json_data = json.dumps(summary["matrix"], ensure_ascii=False, indent=4)
-    st.download_button(
-        label="Download conv_matrix.json (Matrix Only)",
-        data=json_data,
-        file_name="conv_matrix.json",
-        mime="application/json",
-        key="download_matrix_json",
-    )
-    st.caption("Download just the conversation matrix data without metadata")
-
-    # Show logs in debug mode
-    if debug_mode:
-        st.subheader("Debug Logs")
-        logs = get_logs()
-        st.text_area("Logs", value=logs, height=300, key="debug_logs_area")
-
-    # Always offer log download
-    st.divider()
-    st.subheader("Debug Information")
-    st.caption("Technical logs for troubleshooting issues or understanding the analysis process")
+    st.subheader("Debug Logs")
     logs = get_logs()
-    if logs.strip():
-        st.download_button(
-            label="Download Analysis Logs",
-            data=logs,
-            file_name="analysis_logs.txt",
-            mime="text/plain",
-            key="download_logs",
-        )
-        st.caption("Download detailed processing logs including timing information and any warnings")
-    else:
-        st.info(
-            "No logs available. Enable the 'Enable debug mode' checkbox above to capture detailed logs."
-        )
+    st.text_area("Logs", value=logs, height=300, key="debug_logs_area")
+
+# Always offer log download
+st.divider()
+st.subheader("Debug Information")
+st.caption("Technical logs for troubleshooting issues or understanding the analysis process")
+logs = get_logs()
+if logs.strip():
+    st.download_button(
+        label="Download Analysis Logs",
+        data=logs,
+        file_name="analysis_logs.txt",
+        mime="text/plain",
+        key="download_logs",
+    )
+    st.caption("Download detailed processing logs including timing information and any warnings")
+else:
+    st.info(
+        "No logs available. Enable the 'Enable debug mode' checkbox above to capture detailed logs."
+    )

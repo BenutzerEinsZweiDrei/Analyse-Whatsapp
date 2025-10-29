@@ -1936,3 +1936,486 @@ def generate_profile_text(results: Dict) -> str:
     lines.append("*Generated using local deterministic analysis • Privacy-preserving • No external AI calls*")
 
     return "\n".join(lines)
+
+
+# ---------------------------
+# Merge Multiple Profiles Function
+# ---------------------------
+
+
+def merge_local_profiles(
+    profiles_list: List[Tuple[Dict, str, str]]
+) -> Tuple[Dict, str]:
+    """
+    Merge multiple per-file local profile results into a single aggregated profile.
+
+    This function combines personality profiles from multiple files by:
+    - Averaging Big Five trait scores (weighted by conversation count)
+    - Merging MBTI distributions
+    - Combining emotion insights
+    - Aggregating topic summaries
+    - Concatenating per-conversation data
+    - Merging export formats (JSON, CSV)
+
+    Args:
+        profiles_list: List of tuples (results_dict, profile_text, filename) for each file
+                       where results_dict is from run_local_analysis
+
+    Returns:
+        Tuple of (merged_results_dict, merged_profile_text)
+        - merged_results_dict: Combined analysis with aggregated metrics
+        - merged_profile_text: Human-readable merged profile summary
+    """
+    logger.info(f"merge_local_profiles: merging {len(profiles_list)} profiles")
+
+    if not profiles_list:
+        return {
+            "error": "No profiles to merge",
+            "basic_metrics": {},
+            "big_five_aggregation": {},
+            "correlations": {},
+            "topics_summary": {},
+            "mbti_summary": {},
+            "emotion_insights": {},
+            "highlights_and_rankings": {},
+            "advanced_analysis": {},
+            "per_conversation_table": [],
+        }, "⚠️ No profiles available to merge."
+
+    if len(profiles_list) == 1:
+        # Single profile - return as-is with note
+        results, profile_text, filename = profiles_list[0]
+        merged_text = f"# 🔀 Merged Profile (Single File)\n\n*Source: {filename}*\n\n{profile_text}"
+        return results, merged_text
+
+    # Extract data from all profiles
+    all_results = []
+    all_filenames = []
+    total_conversations = 0
+
+    for results, profile_text, filename in profiles_list:
+        if "error" in results:
+            logger.warning(f"Skipping profile with error from {filename}: {results.get('error')}")
+            continue
+        all_results.append(results)
+        all_filenames.append(filename)
+        n = results.get("basic_metrics", {}).get("per_conversation_count", 0)
+        total_conversations += n
+
+    if not all_results:
+        return {
+            "error": "All profiles had errors",
+            "basic_metrics": {},
+            "big_five_aggregation": {},
+            "correlations": {},
+            "topics_summary": {},
+            "mbti_summary": {},
+            "emotion_insights": {},
+            "highlights_and_rankings": {},
+            "advanced_analysis": {},
+            "per_conversation_table": [],
+        }, "⚠️ All profiles had errors and could not be merged."
+
+    logger.debug(
+        f"Merging {len(all_results)} valid profiles with {total_conversations} total conversations"
+    )
+
+    # ========== MERGE BASIC METRICS ==========
+    merged_basic_metrics = {}
+
+    # Merge emotional reciprocity (weighted average by conversation count)
+    recip_sum = 0.0
+    recip_weight = 0
+    for r in all_results:
+        recip_data = r.get("basic_metrics", {}).get("average_emotional_reciprocity", {})
+        if recip_data and "mean" in recip_data:
+            n = recip_data.get("n", 0)
+            recip_sum += recip_data["mean"] * n
+            recip_weight += n
+
+    if recip_weight > 0:
+        merged_basic_metrics["average_emotional_reciprocity"] = {
+            "mean": recip_sum / recip_weight,
+            "n": recip_weight,
+            "std": 0.0,  # Recompute if needed; for simplicity set to 0
+        }
+
+    # Merge dominant emotion counts
+    all_emotion_counts = Counter()
+    for r in all_results:
+        emotion_counts = r.get("basic_metrics", {}).get("dominant_emotion_counts", {})
+        all_emotion_counts.update(emotion_counts)
+    merged_basic_metrics["dominant_emotion_counts"] = dict(all_emotion_counts)
+
+    # Merge MBTI distribution
+    all_mbti_counts = Counter()
+    for r in all_results:
+        mbti_dist = r.get("basic_metrics", {}).get("mbti_distribution", {})
+        all_mbti_counts.update(mbti_dist)
+    merged_basic_metrics["mbti_distribution"] = dict(all_mbti_counts)
+
+    # Merge response time stats (weighted average)
+    rt_sum = 0.0
+    rt_weight = 0
+    for r in all_results:
+        rt_stats = r.get("basic_metrics", {}).get("response_time_stats", {})
+        if rt_stats and "mean" in rt_stats:
+            n = rt_stats.get("n", 0)
+            rt_sum += rt_stats["mean"] * n
+            rt_weight += n
+
+    if rt_weight > 0:
+        merged_basic_metrics["response_time_stats"] = {
+            "mean": rt_sum / rt_weight,
+            "n": rt_weight,
+            "std": 0.0,
+        }
+
+    merged_basic_metrics["per_conversation_count"] = total_conversations
+
+    # ========== MERGE BIG FIVE AGGREGATION ==========
+    merged_big_five = {}
+    traits = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"]
+
+    for trait in traits:
+        trait_sum = 0.0
+        trait_weight = 0
+        for r in all_results:
+            trait_data = r.get("big_five_aggregation", {}).get(trait, {})
+            if trait_data and "mean" in trait_data:
+                n = trait_data.get("n", 0)
+                trait_sum += trait_data["mean"] * n
+                trait_weight += n
+
+        if trait_weight > 0:
+            merged_big_five[trait] = {
+                "mean": trait_sum / trait_weight,
+                "n": trait_weight,
+                "std": 0.0,
+            }
+
+    # Rank traits by mean
+    if merged_big_five:
+        sorted_traits = sorted(merged_big_five.items(), key=lambda x: x[1]["mean"], reverse=True)
+        merged_big_five["top_trait"] = sorted_traits[0][0] if sorted_traits else None
+        merged_big_five["bottom_trait"] = sorted_traits[-1][0] if sorted_traits else None
+
+    # ========== MERGE EMOTION INSIGHTS ==========
+    # Merge flagged conversations (union of all flagged)
+    all_flagged = []
+    for idx, r in enumerate(all_results):
+        flagged = r.get("emotion_insights", {}).get("flagged_conversations", [])
+        # Add source file info to each flagged conversation
+        for flag in flagged:
+            flag_copy = flag.copy()
+            flag_copy["source_file"] = all_filenames[idx]
+            all_flagged.append(flag_copy)
+
+    # Most common emotion across all profiles
+    if merged_basic_metrics.get("dominant_emotion_counts"):
+        most_common_emotion = max(
+            merged_basic_metrics["dominant_emotion_counts"].items(), key=lambda x: x[1]
+        )[0]
+    else:
+        most_common_emotion = "neutral"
+
+    # Average emotion ratios (weighted by conversation count)
+    all_emotion_ratio_sums = defaultdict(float)
+    for r in all_results:
+        avg_ratios = r.get("emotion_insights", {}).get("average_emotion_ratios", {})
+        n = r.get("basic_metrics", {}).get("per_conversation_count", 0)
+        for emotion, ratio in avg_ratios.items():
+            all_emotion_ratio_sums[emotion] += ratio * n
+
+    avg_emotion_ratios = {}
+    if total_conversations > 0:
+        for emotion, total in all_emotion_ratio_sums.items():
+            avg_emotion_ratios[emotion] = total / total_conversations
+
+    merged_emotion_insights = {
+        "flagged_conversations": all_flagged,
+        "most_common_emotion": most_common_emotion,
+        "average_emotion_ratios": avg_emotion_ratios,
+    }
+
+    # ========== MERGE TOPICS SUMMARY ==========
+    # Combine topics from all files
+    all_topics = {}
+    for r in all_results:
+        topics = r.get("topics_summary", {})
+        for topic, data in topics.items():
+            if topic not in all_topics:
+                all_topics[topic] = data.copy()
+            else:
+                # Merge topic data (sum counts, recompute means)
+                existing = all_topics[topic]
+                existing["count"] = existing.get("count", 0) + data.get("count", 0)
+                # For means, we'd need to track totals; simplified: just keep first
+                # In a more sophisticated version, track per-topic totals and recompute
+
+    # ========== MERGE MBTI SUMMARY ==========
+    all_mbti_summary = {}
+    for r in all_results:
+        mbti_summary = r.get("mbti_summary", {})
+        for mbti, data in mbti_summary.items():
+            if mbti not in all_mbti_summary:
+                all_mbti_summary[mbti] = data.copy()
+            else:
+                # Merge MBTI data
+                existing = all_mbti_summary[mbti]
+                existing["count"] = existing.get("count", 0) + data.get("count", 0)
+
+    # ========== MERGE PER-CONVERSATION TABLE ==========
+    all_conversations = []
+    for idx, r in enumerate(all_results):
+        convs = r.get("per_conversation_table", [])
+        # Add source file info
+        for conv in convs:
+            conv_copy = conv.copy() if isinstance(conv, dict) else conv
+            if isinstance(conv_copy, dict):
+                conv_copy["source_file"] = all_filenames[idx]
+            all_conversations.append(conv_copy)
+
+    # ========== COMPILE MERGED RESULTS ==========
+    merged_results = {
+        "basic_metrics": merged_basic_metrics,
+        "big_five_aggregation": merged_big_five,
+        "correlations": {},  # Correlations not merged (too complex without raw data)
+        "topics_summary": all_topics,
+        "mbti_summary": all_mbti_summary,
+        "emotion_insights": merged_emotion_insights,
+        "highlights_and_rankings": {},  # Re-compute if needed
+        "advanced_analysis": {},  # Advanced analysis not merged
+        "per_conversation_table": all_conversations,
+        "merged_from_files": all_filenames,
+        "merged_file_count": len(all_results),
+    }
+
+    # ========== PREPARE MERGED EXPORTS ==========
+    # Merge JSON exports
+    merged_metrics_json = safe_json_dumps(
+        {
+            "basic_metrics": merged_basic_metrics,
+            "personality_aggregation": merged_big_five,
+            "topics_summary": all_topics,
+            "mbti_summary": all_mbti_summary,
+            "emotion_insights": merged_emotion_insights,
+            "merged_from_files": all_filenames,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
+
+    # Merge CSV exports (concatenate all per-conversation data)
+    if HAS_PANDAS:
+        all_df_records = []
+        for conv in all_conversations:
+            if isinstance(conv, dict):
+                all_df_records.append(conv)
+
+        if all_df_records:
+            merged_df = pd.DataFrame(all_df_records)
+            merged_csv = merged_df.to_csv(index=False)
+        else:
+            merged_csv = ""
+    else:
+        # Manual CSV generation
+        if all_conversations and isinstance(all_conversations[0], dict):
+            keys = set()
+            for conv in all_conversations:
+                if isinstance(conv, dict):
+                    keys.update(conv.keys())
+            keys = sorted(keys)
+
+            csv_lines = [",".join(keys)]
+            for conv in all_conversations:
+                if isinstance(conv, dict):
+                    values = []
+                    for key in keys:
+                        val = conv.get(key, "")
+                        if isinstance(val, (list, dict)):
+                            val = json.dumps(val)
+                        val_str = str(val).replace('"', '""')
+                        if "," in val_str or '"' in val_str:
+                            val_str = f'"{val_str}"'
+                        values.append(val_str)
+                    csv_lines.append(",".join(values))
+            merged_csv = "\n".join(csv_lines)
+        else:
+            merged_csv = ""
+
+    # Merge flagged JSON
+    merged_flagged_json = safe_json_dumps(all_flagged, ensure_ascii=False, indent=2)
+
+    merged_results["exports"] = {
+        "metrics_json": merged_metrics_json,
+        "per_conversation_csv": merged_csv,
+        "flagged_json": merged_flagged_json,
+    }
+
+    # ========== GENERATE MERGED PROFILE TEXT ==========
+    merged_profile_text = _generate_merged_profile_text(merged_results, all_filenames)
+
+    logger.info(f"merge_local_profiles completed: {len(all_results)} profiles merged")
+    return merged_results, merged_profile_text
+
+
+def _generate_merged_profile_text(results: Dict, filenames: List[str]) -> str:
+    """
+    Generate human-readable merged profile summary.
+
+    Args:
+        results: Merged results dictionary
+        filenames: List of source filenames
+
+    Returns:
+        Formatted merged profile text
+    """
+    lines = ["# 🔀 Merged Psychological Profile\n"]
+    lines.append(
+        f"*Combined analysis from {len(filenames)} file(s): {', '.join(filenames)}*"
+    )
+    lines.append("\n---\n")
+
+    lines.append("## 📊 Aggregated Personality Overview")
+    lines.append("")
+
+    personality = results.get("big_five_aggregation", {})
+    mbti_dist = results.get("basic_metrics", {}).get("mbti_distribution", {})
+
+    # Big Five Traits Analysis
+    if personality:
+        lines.append("### The Big Five Personality Dimensions (Averaged Across Files)")
+        lines.append("")
+
+        trait_scores = []
+        for trait in ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"]:
+            trait_data = personality.get(trait, {})
+            if trait_data:
+                mean_score = trait_data.get("mean", 5.0)
+                trait_scores.append((trait, mean_score))
+
+        trait_scores.sort(key=lambda x: x[1], reverse=True)
+
+        for trait, score in trait_scores:
+            bar_length = max(0, min(10, int(score)))
+            bar = "█" * bar_length + "░" * (10 - bar_length)
+            lines.append(f"**{trait.title()}**: `{bar}` {score:.1f}/10")
+
+        lines.append("")
+
+    # MBTI Type Analysis
+    if mbti_dist:
+        lines.append("### Myers-Briggs Type Indicator (MBTI) Distribution")
+        lines.append("")
+        top_mbti = max(mbti_dist.items(), key=lambda x: x[1])[0] if mbti_dist else "XXXX"
+        count = mbti_dist.get(top_mbti, 0)
+        total = sum(mbti_dist.values())
+        percentage = (count / total * 100) if total > 0 else 0
+
+        lines.append(f"**Most Frequent Type: {top_mbti}** ({percentage:.0f}%, {count}/{total} conversations)")
+
+        # Show top 3 MBTI types
+        sorted_mbti = sorted(mbti_dist.items(), key=lambda x: x[1], reverse=True)[:3]
+        if len(sorted_mbti) > 1:
+            lines.append("\nTop MBTI Types:")
+            for mbti, cnt in sorted_mbti:
+                pct = (cnt / total * 100) if total > 0 else 0
+                lines.append(f"- {mbti}: {pct:.0f}% ({cnt} conversations)")
+        lines.append("")
+
+    lines.append("---\n")
+
+    # ========== EMOTIONAL INTELLIGENCE SECTION ==========
+    lines.append("## 💝 Merged Emotional Intelligence Metrics")
+    lines.append("")
+
+    # Emotional Reciprocity Analysis
+    recip = results.get("basic_metrics", {}).get("average_emotional_reciprocity", {})
+    if recip:
+        mean_recip = recip.get("mean", 0.5)
+        n_recip = recip.get("n", 0)
+
+        lines.append("### Emotional Reciprocity (Aggregated)")
+
+        recip_percentage = int(mean_recip * 100)
+        recip_bar = "█" * (recip_percentage // 10) + "░" * (10 - recip_percentage // 10)
+        lines.append(f"`{recip_bar}` **{mean_recip:.2f}/1.0** ({recip_percentage}%)")
+        lines.append(f"*Based on {n_recip} conversations across all files*")
+        lines.append("")
+
+    # Dominant Emotions
+    emotion_insights = results.get("emotion_insights", {})
+    most_common = emotion_insights.get("most_common_emotion", "neutral")
+    avg_ratios = emotion_insights.get("average_emotion_ratios", {})
+
+    lines.append("### Emotional Landscape (Combined)")
+    lines.append("")
+    lines.append(f"**Primary Emotional Tone: {most_common.title()}**")
+
+    if avg_ratios:
+        lines.append("\n**Emotion Distribution (Averaged):**")
+        sorted_emotions = sorted(avg_ratios.items(), key=lambda x: x[1], reverse=True)
+        for emotion, ratio in sorted_emotions[:5]:
+            if ratio > 0.05:
+                percentage = ratio * 100
+                bar_len = max(0, min(20, int(percentage / 5)))
+                bar = "▓" * bar_len + "░" * (20 - bar_len)
+                lines.append(f"• {emotion.title()}: `{bar}` {percentage:.1f}%")
+        lines.append("")
+
+    # Response Time Analysis
+    rt_stats = results.get("basic_metrics", {}).get("response_time_stats", {})
+    if rt_stats and rt_stats.get("n", 0) > 0:
+        mean_rt = rt_stats.get("mean", 0.0)
+
+        lines.append("### Communication Responsiveness (Aggregated)")
+        lines.append("")
+
+        if mean_rt < 60:
+            time_str = f"{mean_rt:.0f} minutes"
+        elif mean_rt < 1440:
+            hours = mean_rt / 60
+            time_str = f"{hours:.1f} hours"
+        else:
+            days = mean_rt / 1440
+            time_str = f"{days:.1f} days"
+
+        lines.append(f"**Average Response Time: {time_str}**")
+        lines.append(f"*Computed from {rt_stats.get('n', 0)} conversation exchanges*")
+        lines.append("")
+
+    lines.append("---\n")
+
+    # ========== FLAGGED CONVERSATIONS ==========
+    flagged = emotion_insights.get("flagged_conversations", [])
+    if flagged:
+        lines.append("## ⚠️ Flagged Conversations (All Files)")
+        lines.append("")
+        lines.append(f"Found {len(flagged)} flagged conversation(s) across all files:")
+
+        # Group by reason
+        by_reason = defaultdict(list)
+        for flag in flagged:
+            by_reason[flag.get("reason", "unknown")].append(flag)
+
+        for reason, flags in by_reason.items():
+            lines.append(f"\n**{reason.replace('_', ' ').title()}**: {len(flags)} conversation(s)")
+
+        lines.append("")
+
+    # ========== SUMMARY ==========
+    lines.append("## 📈 Merge Summary")
+    lines.append("")
+    n_conversations = results.get("basic_metrics", {}).get("per_conversation_count", 0)
+    lines.append(f"- **Total Conversations Analyzed**: {n_conversations}")
+    lines.append(f"- **Files Merged**: {len(filenames)}")
+    lines.append(f"- **Source Files**: {', '.join(filenames)}")
+    lines.append("")
+
+    lines.append("---\n")
+    lines.append(
+        "*Merged profile generated from multiple local analyses • Privacy-preserving • No external AI calls*"
+    )
+
+    return "\n".join(lines)
