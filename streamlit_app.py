@@ -58,7 +58,11 @@ if "username" not in st.session_state:
     st.session_state.username = ""
 
 # Debug toggle in UI
-debug_mode = st.checkbox("Enable debug mode (show logs and detailed info)", value=False)
+debug_mode = st.checkbox(
+    "Enable debug mode (show logs and detailed info)",
+    value=False,
+    help="Shows detailed logging information, environment details, and error traces. Useful for troubleshooting issues or understanding how the analysis works.",
+)
 set_debug_mode(debug_mode)
 
 # Show environment info in debug mode
@@ -116,16 +120,43 @@ st.info(
     "4. Click 'Upload Files' to begin"
 )
 
+# Add explanatory expander about profile types
+with st.expander("ℹ️ Understanding Profile Types"):
+    st.markdown("""
+    **Local Profile (Privacy-Focused):**
+    - Runs entirely on your machine using statistical analysis
+    - No data sent to external services
+    - Provides Big Five personality traits (OCEAN), MBTI type, and detailed conversation metrics
+    - Deterministic and reproducible results
+    - Best for: Privacy-conscious users, offline analysis
+    
+    **AI Profile (Narrative Style):**
+    - Uses AI to generate natural language interpretations
+    - Requires internet connection
+    - Provides more narrative and contextual insights
+    - Results may vary between generations
+    - Best for: Easy-to-read summaries, contextual understanding
+    
+    **Merging Profiles:**
+    - Combines multiple Local Profiles into a comprehensive view
+    - Useful when analyzing the same person across different time periods or chat groups
+    - Requires at least 2 Local Profiles to merge
+    """)
+
 with st.form("upload_form"):
     uploaded_files = st.file_uploader(
         "Upload your whatsapp.txt file(s)",
         type=["txt"],
         accept_multiple_files=True,
-        help="Upload 1-5 WhatsApp chat export files.",
+        help="Upload 1-5 WhatsApp chat export files. Files should be in WhatsApp's standard export format with timestamps, usernames, and messages. Multiple files will be automatically merged and deduplicated.",
     )
     st.caption("Upload one or more exported WhatsApp chat files in .txt format (max 5 files)")
 
-    username = st.text_input("Enter the username to analyze", value=st.session_state.username)
+    username = st.text_input(
+        "Enter the username to analyze",
+        value=st.session_state.username,
+        help="This should be the exact name as it appears before the colon in chat messages (e.g., 'John Doe' in 'John Doe: Hello')",
+    )
     st.caption("Enter the exact username as it appears in the chat messages")
 
     submit_upload = st.form_submit_button("Upload Files")
@@ -220,7 +251,7 @@ if st.session_state.files:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if st.button("🔄 Analyze All Files", key="analyze_all"):
+        if st.button("🔄 Analyze All Files", key="analyze_all", help="Run conversation analysis on all uploaded files. This extracts messages, topics, sentiment, emotions, and personality traits."):
             for file_state in st.session_state.files:
                 if file_state["analysis_status"] not in ["success"]:
                     file_state["analysis_status"] = "queued"
@@ -238,6 +269,7 @@ if st.session_state.files:
             f"🧠 Generate Local Profiles for All ({analyzed_without_local})",
             key="generate_local_all",
             disabled=analyzed_without_local == 0,
+            help="Generate privacy-focused psychological profiles locally on your machine without sending data to external AI services. Uses statistical analysis of conversation patterns.",
         ):
             for file_state in st.session_state.files:
                 if (
@@ -259,6 +291,7 @@ if st.session_state.files:
             f"🤖 Generate AI Profiles for All ({analyzed_without_ai})",
             key="generate_ai_all",
             disabled=analyzed_without_ai == 0,
+            help="Generate AI-powered psychological profiles using natural language generation. Requires internet connection. Provides more narrative-style insights.",
         ):
             for file_state in st.session_state.files:
                 if (
@@ -278,6 +311,7 @@ if st.session_state.files:
             f"🔀 Merge personality profiles ({files_with_local}) — Create final merged profile",
             key="merge_profiles",
             disabled=files_with_local < 2,
+            help="Combine multiple personality profiles into a single comprehensive profile. Useful when analyzing the same person across multiple chat exports or time periods.",
         ):
             st.session_state.merge_requested = True
             st.rerun()
@@ -287,8 +321,9 @@ if st.session_state.files:
     # Show clear merge CTA when we have 2+ local profiles
     if files_with_local >= 2 and not st.session_state.merged_profiles:
         st.info(
-            f"✨ **Now we have {files_with_local} personality profiles — "
-            f"merge them into a big final one!**"
+            f"✨ **You have {files_with_local} personality profiles ready!**\n\n"
+            f"Click the '🔀 Merge personality profiles' button above to combine them into a single comprehensive profile. "
+            f"This is useful for getting a complete picture of someone's personality across multiple conversations or time periods."
         )
 
     # Guard against re-entrancy during processing and only process if queue flag is set
@@ -497,11 +532,23 @@ if st.session_state.files:
                 st.markdown("**Analysis Summary:**")
                 col_metrics1, col_metrics2, col_metrics3 = st.columns(3)
                 with col_metrics1:
-                    st.metric("Positive Topics", len(summary["positive_topics"]))
+                    st.metric(
+                        "Positive Topics",
+                        len(summary["positive_topics"]),
+                        help="Number of topics discussed with positive sentiment (e.g., hobbies, celebrations, happy events)",
+                    )
                 with col_metrics2:
-                    st.metric("Negative Topics", len(summary["negative_topics"]))
+                    st.metric(
+                        "Negative Topics",
+                        len(summary["negative_topics"]),
+                        help="Number of topics discussed with negative sentiment (e.g., complaints, problems, sad events)",
+                    )
                 with col_metrics3:
-                    st.metric("Emotion Var.", f"{summary['emotion_variability']:.3f}")
+                    st.metric(
+                        "Emotion Var.",
+                        f"{summary['emotion_variability']:.3f}",
+                        help="Emotional variability score (0-1). Higher values indicate more diverse emotional expressions across conversations.",
+                    )
 
                 # Detailed view toggle
                 with st.expander(f"📊 View Full Analysis for {file_state['filename']}"):
@@ -526,6 +573,7 @@ if st.session_state.files:
                         file_name=f"analysis_{file_state['filename']}.json",
                         mime="application/json",
                         key=f"download_analysis_{idx}",
+                        help="Download raw analysis results including all detected topics, sentiment scores, and emotion metrics.",
                     )
 
                 # Profile generation buttons
@@ -535,7 +583,11 @@ if st.session_state.files:
                 with col_profile1:
                     local_status = file_state["local_profile"]["status"]
                     if local_status == "none":
-                        if st.button("🧠 Generate Local Profile", key=f"local_{idx}"):
+                        if st.button(
+                            "🧠 Generate Local Profile",
+                            key=f"local_{idx}",
+                            help="Generate a psychological profile using local statistical analysis. Runs on your machine, no data sent externally. Includes Big Five personality traits, MBTI type, and conversation patterns.",
+                        ):
                             file_state["local_profile"]["status"] = "queued"
                             st.rerun()
                     elif local_status == "running":
@@ -554,7 +606,11 @@ if st.session_state.files:
                 with col_profile2:
                     ai_status = file_state["ai_profile"]["status"]
                     if ai_status == "none":
-                        if st.button("🤖 Generate AI Profile", key=f"ai_{idx}"):
+                        if st.button(
+                            "🤖 Generate AI Profile",
+                            key=f"ai_{idx}",
+                            help="Generate a narrative psychological profile using AI. Requires internet connection. Provides natural language insights and interpretations of the analysis data.",
+                        ):
                             file_state["ai_profile"]["status"] = "queued"
                             st.rerun()
                     elif ai_status == "running":
@@ -589,6 +645,7 @@ if st.session_state.files:
                                             file_name=f"local_profile_{file_state['filename']}.json",
                                             mime="application/json",
                                             key=f"dl_json_{idx}",
+                                            help="Download complete analysis results as JSON. Contains all metrics, personality traits, and statistical data.",
                                         )
 
                                 with col_dl2:
@@ -599,6 +656,7 @@ if st.session_state.files:
                                             file_name=f"conversations_{file_state['filename']}.csv",
                                             mime="text/csv",
                                             key=f"dl_csv_{idx}",
+                                            help="Download per-conversation metrics as CSV. Easy to open in Excel or Google Sheets for further analysis.",
                                         )
 
                                 with col_dl3:
@@ -611,6 +669,7 @@ if st.session_state.files:
                                                 file_name=f"flagged_{file_state['filename']}.json",
                                                 mime="application/json",
                                                 key=f"dl_flagged_{idx}",
+                                                help="Download conversations flagged as unusual or interesting based on emotional patterns or sentiment extremes.",
                                             )
 
                         if st.button("❌ Close", key=f"close_local_{idx}"):
@@ -658,6 +717,7 @@ if st.session_state.files:
                             file_name="merged_personality_profile.json",
                             mime="application/json",
                             key="dl_merged_json",
+                            help="Complete merged profile with all personality traits, metrics, and statistics combined from multiple files.",
                         )
 
                 with col_merge2:
@@ -668,6 +728,7 @@ if st.session_state.files:
                             file_name="merged_conversations.csv",
                             mime="text/csv",
                             key="dl_merged_csv",
+                            help="All conversations from merged files in CSV format for spreadsheet analysis.",
                         )
 
                 with col_merge3:
@@ -680,6 +741,7 @@ if st.session_state.files:
                                 file_name="merged_flagged.json",
                                 mime="application/json",
                                 key="dl_merged_flagged",
+                                help="Flagged conversations from all merged files - highlights unusual patterns or emotionally significant exchanges.",
                             )
 
 # Show logs in debug mode
@@ -701,6 +763,7 @@ if logs.strip():
         file_name="analysis_logs.txt",
         mime="text/plain",
         key="download_logs",
+        help="Download technical logs containing timestamps, processing steps, and any warnings or errors encountered during analysis.",
     )
     st.caption("Download detailed processing logs including timing information and any warnings")
 else:
