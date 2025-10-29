@@ -42,6 +42,7 @@ Thumbs.db
 # Temporary files
 /tmp/
 *.log
+*.pid
 
 # Environment variables and secrets
 .env
