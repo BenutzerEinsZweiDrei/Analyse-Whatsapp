@@ -4,7 +4,7 @@ Profile matrix module for Profile Fusion.
 Creates personality profile matrices that fuse features across files.
 """
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 import pandas as pd
 import streamlit as st
@@ -14,7 +14,7 @@ from .io import normalize_data
 
 @st.cache_data
 def create_profile_matrix(
-    data_list: List[Dict[str, Any]], filenames: Optional[List[str]] = None
+    data_list: list[dict[str, Any]], filenames: list[str] | None = None
 ) -> pd.DataFrame:
     """
     Create personality profile matrix across files.
@@ -71,7 +71,7 @@ def create_profile_matrix(
         all_emotions.update(emotion_counts.keys())
 
     # Get emotion counts for each file
-    emotion_totals = {emotion: 0 for emotion in all_emotions}
+    emotion_totals = dict.fromkeys(all_emotions, 0)
     for data in normalized_list:
         basic_metrics = data.get("basic_metrics", {})
         emotion_counts = basic_metrics.get("dominant_emotion_counts", {})
@@ -128,9 +128,9 @@ def normalize_matrix(
     if method == "minmax":
         # Min-max normalization per row
         normalized = numeric_matrix.apply(
-            lambda row: (row - row.min()) / (row.max() - row.min())
-            if row.max() != row.min()
-            else row,
+            lambda row: (
+                (row - row.min()) / (row.max() - row.min()) if row.max() != row.min() else row
+            ),
             axis=1,
         )
     elif method == "zscore":
@@ -152,7 +152,7 @@ def normalize_matrix(
 
 
 @st.cache_data
-def create_aggregated_profile_matrix(data_list: List[Dict[str, Any]]) -> pd.DataFrame:
+def create_aggregated_profile_matrix(data_list: list[dict[str, Any]]) -> pd.DataFrame:
     """
     Create aggregated profile matrix with mean, std, min, max across files.
 

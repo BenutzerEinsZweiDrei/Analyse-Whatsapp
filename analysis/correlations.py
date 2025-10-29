@@ -4,9 +4,8 @@ Correlation analysis module for Profile Fusion.
 Computes Pearson and Spearman correlations with statistical significance tests.
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
-import pandas as pd
 import streamlit as st
 
 try:
@@ -21,7 +20,7 @@ from .io import normalize_data
 
 
 @st.cache_data
-def compute_pearson_correlation(x: List[float], y: List[float]) -> Optional[Tuple[float, float]]:
+def compute_pearson_correlation(x: list[float], y: list[float]) -> tuple[float, float] | None:
     """
     Compute Pearson correlation coefficient and p-value.
 
@@ -46,7 +45,7 @@ def compute_pearson_correlation(x: List[float], y: List[float]) -> Optional[Tupl
 
 
 @st.cache_data
-def compute_spearman_correlation(x: List[float], y: List[float]) -> Optional[Tuple[float, float]]:
+def compute_spearman_correlation(x: list[float], y: list[float]) -> tuple[float, float] | None:
     """
     Compute Spearman correlation coefficient and p-value.
 
@@ -72,8 +71,8 @@ def compute_spearman_correlation(x: List[float], y: List[float]) -> Optional[Tup
 
 @st.cache_data
 def compute_correlations(
-    data_list: List[Dict[str, Any]], p_threshold: float = 0.05
-) -> Dict[str, Any]:
+    data_list: list[dict[str, Any]], p_threshold: float = 0.05
+) -> dict[str, Any]:
     """
     Compute correlations between personality traits and behavioral metrics.
 
@@ -234,8 +233,8 @@ def compute_correlations(
             trait_behavior_summary[var1][var2]["correlations"].append(corr)
 
     # Compute averages and consistency
-    for trait, behaviors in trait_behavior_summary.items():
-        for behavior, data in behaviors.items():
+    for _trait, behaviors in trait_behavior_summary.items():
+        for _behavior, data in behaviors.items():
             correlations = data["correlations"]
             if correlations:
                 pearson_rs = [c["pearson_r"] for c in correlations if c["pearson_r"] is not None]
@@ -255,8 +254,8 @@ def compute_correlations(
 
 
 def get_top_correlations(
-    correlations: List[Dict[str, Any]], top_n: int = 5
-) -> Dict[str, List[Dict[str, Any]]]:
+    correlations: list[dict[str, Any]], top_n: int = 5
+) -> dict[str, list[dict[str, Any]]]:
     """
     Get top N positive and negative correlations by effect size.
 

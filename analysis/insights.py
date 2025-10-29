@@ -4,7 +4,7 @@ Insights module for Profile Fusion.
 Generates emotional patterns and topic-level insights.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 import streamlit as st
 
@@ -13,7 +13,7 @@ from .stats import compute_per_topic_statistics
 
 
 @st.cache_data
-def generate_emotional_insights(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+def generate_emotional_insights(data_list: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Generate insights about emotional patterns across profiles.
 
@@ -43,16 +43,15 @@ def generate_emotional_insights(data_list: List[Dict[str, Any]]) -> Dict[str, An
     # Get top 3 emotions
     sorted_emotions = sorted(emotion_totals.items(), key=lambda x: x[1], reverse=True)
     insights["top_emotions"] = [
-        {"emotion": emotion, "count": count, "percentage": 0} for emotion, count in sorted_emotions[:3]
+        {"emotion": emotion, "count": count, "percentage": 0}
+        for emotion, count in sorted_emotions[:3]
     ]
 
     # Calculate percentages
     total_emotions = sum(emotion_totals.values())
     if total_emotions > 0:
         for emotion_info in insights["top_emotions"]:
-            emotion_info["percentage"] = round(
-                (emotion_info["count"] / total_emotions) * 100, 2
-            )
+            emotion_info["percentage"] = round((emotion_info["count"] / total_emotions) * 100, 2)
 
     # For each top emotion, gather details
     for emotion_info in insights["top_emotions"]:
@@ -84,9 +83,7 @@ def generate_emotional_insights(data_list: List[Dict[str, Any]]) -> Dict[str, An
             emotion_counts = basic_metrics.get("dominant_emotion_counts", {})
 
             # Simple heuristic: if this emotion is in top 3 for this file
-            sorted_file_emotions = sorted(
-                emotion_counts.items(), key=lambda x: x[1], reverse=True
-            )
+            sorted_file_emotions = sorted(emotion_counts.items(), key=lambda x: x[1], reverse=True)
             top_3_emotions = [e[0] for e in sorted_file_emotions[:3]]
 
             if emotion in top_3_emotions:
@@ -113,7 +110,7 @@ def generate_emotional_insights(data_list: List[Dict[str, Any]]) -> Dict[str, An
 
 
 @st.cache_data
-def generate_topic_insights(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+def generate_topic_insights(data_list: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Generate topic-level insights across profiles.
 
@@ -185,8 +182,7 @@ def generate_topic_insights(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     if topics_with_positivity:
         topics_with_positivity.sort(key=lambda x: x[1], reverse=True)
         insights["most_positive_topics"] = [
-            {"topic": topic, "positive_count": count}
-            for topic, count in topics_with_positivity[:3]
+            {"topic": topic, "positive_count": count} for topic, count in topics_with_positivity[:3]
         ]
 
     # Identify outliers (>2 std dev from mean)

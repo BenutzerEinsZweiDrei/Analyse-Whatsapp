@@ -4,17 +4,17 @@ Narrative module for Profile Fusion.
 Generates human-readable natural language summaries of personality profiles.
 """
 
-from typing import Any, Dict, List, Literal
+from typing import Any, Literal
 
 import streamlit as st
 
 
 @st.cache_data
 def generate_natural_language_summary(
-    aggregated_stats: Dict[str, Any],
-    correlations: Dict[str, Any],
-    emotional_insights: Dict[str, Any],
-    topic_insights: Dict[str, Any],
+    aggregated_stats: dict[str, Any],
+    correlations: dict[str, Any],
+    emotional_insights: dict[str, Any],
+    topic_insights: dict[str, Any],
     num_files: int,
     format_style: Literal["bullet", "paragraph"] = "bullet",
 ) -> str:
@@ -35,7 +35,7 @@ def generate_natural_language_summary(
     sections = []
 
     # Header
-    sections.append(f"## Personality Fusion Analysis Summary\n")
+    sections.append("## Personality Fusion Analysis Summary\n")
     sections.append(f"*Analysis of {num_files} personality profile(s)*\n")
 
     # Emotional tone summary
@@ -46,7 +46,6 @@ def generate_natural_language_summary(
         emotion_names = [e["emotion"] for e in top_emotions]
         emotion_text = ", ".join(emotion_names[:-1]) + f", and {emotion_names[-1]}"
 
-        total_count = sum(e["count"] for e in top_emotions)
         percentages = [f"{e['emotion']} ({e['percentage']}%)" for e in top_emotions]
 
         if format_style == "bullet":
@@ -116,11 +115,12 @@ def generate_natural_language_summary(
         std_r = aggregated_stats["reciprocity"].get("std")
 
         if format_style == "bullet":
-            sections.append(f"- **Emotional reciprocity** averages **{mean_r:.3f}**", end="")
+            text = f"- **Emotional reciprocity** averages **{mean_r:.3f}**"
             if std_r:
-                sections.append(f" (± {std_r:.3f})")
+                text += f" (± {std_r:.3f})"
             else:
-                sections.append(".")
+                text += "."
+            sections.append(text)
         else:
             text = f"Emotional reciprocity averages {mean_r:.3f}"
             if std_r:
@@ -133,11 +133,12 @@ def generate_natural_language_summary(
         std_rt = aggregated_stats["response_time"].get("std")
 
         if format_style == "bullet":
-            sections.append(f"- **Response time** averages **{mean_rt:.2f} seconds**", end="")
+            text = f"- **Response time** averages **{mean_rt:.2f} seconds**"
             if std_rt:
-                sections.append(f" (± {std_rt:.2f})")
+                text += f" (± {std_rt:.2f})"
             else:
-                sections.append(".")
+                text += "."
+            sections.append(text)
         else:
             text = f"The average response time is {mean_rt:.2f} seconds"
             if std_rt:

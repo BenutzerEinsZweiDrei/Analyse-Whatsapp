@@ -31,7 +31,7 @@ class TestProfileFusionIntegration:
         profiles = []
 
         for i in [1, 2]:
-            with open(fixtures_dir / f"profile{i}.json", "r") as f:
+            with open(fixtures_dir / f"profile{i}.json") as f:
                 profiles.append(json.load(f))
 
         return profiles

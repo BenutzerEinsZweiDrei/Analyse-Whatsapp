@@ -6,7 +6,7 @@ Reusable Streamlit UI components for the personality fusion tool.
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -17,10 +17,10 @@ def create_merged_json_export(
     emotions_df: pd.DataFrame,
     mbti_df: pd.DataFrame,
     profile_matrix: pd.DataFrame,
-    aggregated_stats: Dict[str, Any],
-    correlations: Dict[str, Any],
-    emotional_insights: Dict[str, Any],
-    topic_insights: Dict[str, Any],
+    aggregated_stats: dict[str, Any],
+    correlations: dict[str, Any],
+    emotional_insights: dict[str, Any],
+    topic_insights: dict[str, Any],
 ) -> str:
     """
     Create comprehensive JSON export with backward compatibility.
@@ -94,7 +94,7 @@ def create_merged_json_export(
     return json.dumps(merged_data, indent=2, ensure_ascii=False)
 
 
-def display_correlation_table(correlations: Dict[str, Any], p_threshold: float) -> None:
+def display_correlation_table(correlations: dict[str, Any], p_threshold: float) -> None:
     """
     Display correlation results as an interactive table.
 
@@ -171,7 +171,7 @@ def display_profile_matrix_heatmap(matrix: pd.DataFrame) -> None:
         st.dataframe(matrix, use_container_width=True)
 
 
-def display_trait_behavior_summary(trait_behavior_summary: Dict[str, Any]) -> None:
+def display_trait_behavior_summary(trait_behavior_summary: dict[str, Any]) -> None:
     """
     Display trait-behavior association summary.
 
@@ -209,7 +209,7 @@ def display_trait_behavior_summary(trait_behavior_summary: Dict[str, Any]) -> No
         st.info("No significant trait-behavior associations found.")
 
 
-def display_emotional_insights(emotional_insights: Dict[str, Any]) -> None:
+def display_emotional_insights(emotional_insights: dict[str, Any]) -> None:
     """
     Display emotional pattern insights.
 
@@ -241,12 +241,10 @@ def display_emotional_insights(emotional_insights: Dict[str, Any]) -> None:
             st.write(f"   - Average reciprocity: {emotion_details['mean_reciprocity']:.4f}")
 
         if emotion_details.get("mean_response_time") is not None:
-            st.write(
-                f"   - Average response time: {emotion_details['mean_response_time']:.2f}s"
-            )
+            st.write(f"   - Average response time: {emotion_details['mean_response_time']:.2f}s")
 
 
-def display_topic_insights(topic_insights: Dict[str, Any]) -> None:
+def display_topic_insights(topic_insights: dict[str, Any]) -> None:
     """
     Display topic-level insights.
 

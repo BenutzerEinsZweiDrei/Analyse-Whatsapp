@@ -87,9 +87,7 @@ class TestNormalizeMBTIData:
 
     def test_nested_format(self):
         """Test normalization of nested MBTI format."""
-        mbti_data = {
-            "INTJ": {"count": 10, "mean_reciprocity": 0.75, "mean_response_time": 120}
-        }
+        mbti_data = {"INTJ": {"count": 10, "mean_reciprocity": 0.75, "mean_response_time": 120}}
         result = normalize_mbti_data(mbti_data)
         assert result["INTJ"]["count"] == 10
         assert result["INTJ"]["mean_reciprocity"] == 0.75

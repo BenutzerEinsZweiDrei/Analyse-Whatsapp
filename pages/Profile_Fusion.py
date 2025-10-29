@@ -19,7 +19,6 @@ Version: 2.0
 
 from datetime import datetime, timezone
 
-import pandas as pd
 import streamlit as st
 
 # Import analysis modules
@@ -72,7 +71,10 @@ def main():
     )
 
     summary_format = st.sidebar.radio(
-        "Summary format", options=["bullet", "paragraph"], index=0, help="Natural language summary format"
+        "Summary format",
+        options=["bullet", "paragraph"],
+        index=0,
+        help="Natural language summary format",
     )
 
     show_per_topic = st.sidebar.checkbox(

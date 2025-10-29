@@ -5,14 +5,14 @@ Handles loading, validation, and normalization of JSON personality profile files
 """
 
 import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import streamlit as st
 
 
 def load_and_validate_json_files(
-    uploaded_files: List[Any],
-) -> Tuple[List[Dict[str, Any]], List[str]]:
+    uploaded_files: list[Any],
+) -> tuple[list[dict[str, Any]], list[str]]:
     """
     Load and validate JSON files from uploaded file objects.
 
@@ -52,7 +52,7 @@ def load_and_validate_json_files(
 
 
 @st.cache_data
-def normalize_trait_value(value: Any) -> Optional[float]:
+def normalize_trait_value(value: Any) -> float | None:
     """
     Normalize trait values that might be in different formats.
 
@@ -90,7 +90,7 @@ def normalize_trait_value(value: Any) -> Optional[float]:
 
 
 @st.cache_data
-def normalize_emotion_counts(emotion_data: Dict[str, Any]) -> Dict[str, int]:
+def normalize_emotion_counts(emotion_data: dict[str, Any]) -> dict[str, int]:
     """
     Normalize emotion count dictionaries to ensure integer counts.
 
@@ -117,7 +117,7 @@ def normalize_emotion_counts(emotion_data: Dict[str, Any]) -> Dict[str, int]:
 
 
 @st.cache_data
-def normalize_mbti_data(mbti_data: Dict[str, Any]) -> Dict[str, Dict[str, float]]:
+def normalize_mbti_data(mbti_data: dict[str, Any]) -> dict[str, dict[str, float]]:
     """
     Normalize MBTI data to consistent format.
 
@@ -151,7 +151,7 @@ def normalize_mbti_data(mbti_data: Dict[str, Any]) -> Dict[str, Dict[str, float]
 
 
 @st.cache_data
-def normalize_response_time(time_value: Any) -> Optional[float]:
+def normalize_response_time(time_value: Any) -> float | None:
     """
     Normalize response time to seconds.
 
@@ -173,7 +173,7 @@ def normalize_response_time(time_value: Any) -> Optional[float]:
     return value
 
 
-def normalize_data(data: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_data(data: dict[str, Any]) -> dict[str, Any]:
     """
     Normalize a single personality profile data dictionary.
 

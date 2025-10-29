@@ -4,16 +4,15 @@ Statistics module for Profile Fusion.
 Computes aggregated statistics across personality profiles.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import pandas as pd
 import streamlit as st
 
 from .io import normalize_data
 
 
 @st.cache_data
-def compute_aggregated_statistics(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+def compute_aggregated_statistics(data_list: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Compute aggregated statistics across all personality profiles.
 
@@ -136,7 +135,7 @@ def compute_aggregated_statistics(data_list: List[Dict[str, Any]]) -> Dict[str, 
 
 
 @st.cache_data
-def compute_per_topic_statistics(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+def compute_per_topic_statistics(data_list: list[dict[str, Any]]) -> dict[str, Any]:
     """
     Compute statistics at the topic level across profiles.
 

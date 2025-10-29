@@ -4,16 +4,16 @@ Merge module for Profile Fusion.
 Handles merging of personality traits, emotions, and MBTI data across multiple profiles.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 import pandas as pd
 import streamlit as st
 
-from .io import normalize_data, normalize_trait_value
+from .io import normalize_data
 
 
 @st.cache_data
-def merge_big_five(data_list: List[Dict[str, Any]]) -> pd.DataFrame:
+def merge_big_five(data_list: list[dict[str, Any]]) -> pd.DataFrame:
     """
     Merge Big Five personality traits across multiple profiles.
 
@@ -68,7 +68,7 @@ def merge_big_five(data_list: List[Dict[str, Any]]) -> pd.DataFrame:
 
 
 @st.cache_data
-def merge_emotions(data_list: List[Dict[str, Any]]) -> pd.DataFrame:
+def merge_emotions(data_list: list[dict[str, Any]]) -> pd.DataFrame:
     """
     Merge emotion counts across multiple profiles.
 
@@ -106,7 +106,7 @@ def merge_emotions(data_list: List[Dict[str, Any]]) -> pd.DataFrame:
 
 
 @st.cache_data
-def merge_mbti(data_list: List[Dict[str, Any]]) -> pd.DataFrame:
+def merge_mbti(data_list: list[dict[str, Any]]) -> pd.DataFrame:
     """
     Merge MBTI type counts across multiple profiles.
 
@@ -177,9 +177,7 @@ def merge_mbti(data_list: List[Dict[str, Any]]) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
-def merge_all_data(
-    data_list: List[Dict[str, Any]]
-) -> Dict[str, pd.DataFrame]:
+def merge_all_data(data_list: list[dict[str, Any]]) -> dict[str, pd.DataFrame]:
     """
     Merge all personality data across multiple profiles.
 
