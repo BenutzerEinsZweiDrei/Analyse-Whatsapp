@@ -55,6 +55,7 @@ if "analysis_done" not in st.session_state:
     st.session_state.conversation_messages = None
     st.session_state.file_content = None
     st.session_state.username = ""
+    st.session_state.uploaded_files_metadata = []
 
 # Debug toggle in UI
 debug_mode = st.checkbox("Enable debug mode (show logs and detailed info)", value=False)
@@ -110,14 +111,19 @@ if debug_mode:
 st.info(
     "📋 **How to get started:**\n"
     "1. Export your WhatsApp chat (Settings → Export chat → Without media)\n"
-    "2. Upload the .txt file below\n"
+    "2. Upload 1-5 .txt files below (you can merge multiple exports)\n"
     "3. Enter the username you want to analyze (as it appears in the chat)\n"
     "4. Click 'Start Analysis' to begin processing"
 )
 
 with st.form("analysis_form"):
-    uploaded_file = st.file_uploader("Upload your whatsapp.txt file", type=["txt"])
-    st.caption("Upload the exported WhatsApp chat file in .txt format")
+    uploaded_files = st.file_uploader(
+        "Upload your whatsapp.txt file(s)",
+        type=["txt"],
+        accept_multiple_files=True,
+        help="Upload 1-5 WhatsApp chat export files. Multiple files will be merged automatically.",
+    )
+    st.caption("Upload one or more exported WhatsApp chat files in .txt format (max 5 files)")
 
     username = st.text_input("Enter the username to analyze")
     st.caption("Enter the exact username as it appears in the chat messages")
@@ -127,39 +133,74 @@ with st.form("analysis_form"):
 
 if submit_analysis:
     try:
-        if not uploaded_file:
-            st.error("Please upload a whatsapp.txt file.")
-            logger.warning("Start Analysis pressed but no file uploaded.")
+        if not uploaded_files:
+            st.error("Please upload at least one whatsapp.txt file.")
+            logger.warning("Start Analysis pressed but no files uploaded.")
+        elif len(uploaded_files) > 5:
+            st.error("Please upload a maximum of 5 files.")
+            logger.warning(f"Too many files uploaded: {len(uploaded_files)}")
         elif not username.strip():
             st.error("Please enter a username.")
             logger.warning("Start Analysis pressed but username is empty.")
         else:
-            # Read and decode file
-            file_bytes = uploaded_file.read()
-            file_size = len(file_bytes)
-            logger.info(
-                f"File uploaded: filename={getattr(uploaded_file, 'name', '<unknown>')}, size={file_size} bytes"
-            )
+            # Process all uploaded files
+            file_contents = []
+            file_metadata = []
+            total_size = 0
 
-            try:
-                file_content = file_bytes.decode("utf-8")
-            except UnicodeDecodeError:
+            st.info(f"📁 Processing {len(uploaded_files)} file(s)...")
+
+            for idx, uploaded_file in enumerate(uploaded_files, 1):
+                file_bytes = uploaded_file.read()
+                file_size = len(file_bytes)
+                total_size += file_size
+                filename = getattr(uploaded_file, "name", f"file_{idx}.txt")
+
+                logger.info(f"File {idx}/{len(uploaded_files)}: filename={filename}, size={file_size} bytes")
+
+                # Try to decode with utf-8 first, fallback to latin-1
+                decode_used = "utf-8"
                 try:
-                    file_content = file_bytes.decode("latin-1")
-                    logger.warning("File decoded with latin-1 fallback.")
-                except Exception:
-                    st.error(
-                        "Could not decode uploaded file. Please provide a UTF-8 encoded text file."
-                    )
-                    logger.exception("Failed to decode uploaded file.")
-                    raise
+                    file_content = file_bytes.decode("utf-8")
+                except UnicodeDecodeError:
+                    try:
+                        file_content = file_bytes.decode("latin-1")
+                        decode_used = "latin-1"
+                        logger.warning(f"File '{filename}' decoded with latin-1 fallback.")
+                    except Exception as e:
+                        st.error(
+                            f"Could not decode file '{filename}'. Please provide a UTF-8 encoded text file."
+                        )
+                        logger.exception(f"Failed to decode file '{filename}': {e}")
+                        raise
+
+                file_contents.append(file_content)
+                file_metadata.append({
+                    "filename": filename,
+                    "file_size_bytes": file_size,
+                    "decode_used": decode_used,
+                })
+
+                st.caption(f"✅ {filename}: {file_size:,} bytes ({decode_used})")
+
+            logger.info(f"All files decoded successfully. Total size: {total_size:,} bytes")
 
             # Run analysis
             with st.spinner("Analyzing conversations... This may take a while."):
                 total_start = time.time()
 
                 # Use cached analysis function from app.run_analysis
-                matrix, conversation_messages = cached_run_analysis(file_content, username.strip())
+                # Pass list of contents for multi-file or single string for single file (backward compatible)
+                if len(file_contents) == 1:
+                    # Single file - use original behavior
+                    matrix, conversation_messages = cached_run_analysis(
+                        file_contents[0], username.strip()
+                    )
+                else:
+                    # Multiple files - use new merge behavior
+                    matrix, conversation_messages = cached_run_analysis(
+                        file_contents, username.strip(), file_metadata
+                    )
 
                 # Summarize results
                 summary = summarize_matrix(matrix)
@@ -171,13 +212,14 @@ if submit_analysis:
             st.session_state.matrix = matrix
             st.session_state.summary = summary
             st.session_state.conversation_messages = conversation_messages
-            st.session_state.file_content = file_content
+            st.session_state.file_content = file_contents if len(file_contents) > 1 else file_contents[0]
             st.session_state.username = username.strip()
             st.session_state.analysis_done = True
-            st.session_state.file_size = file_size
+            st.session_state.file_size = total_size
             st.session_state.total_time = total_time
+            st.session_state.uploaded_files_metadata = file_metadata
 
-            st.success("Analysis completed!")
+            st.success(f"✅ Analysis completed! Processed {len(uploaded_files)} file(s).")
 
     except Exception as main_e:
         logger.exception(f"Unhandled exception during analysis: {main_e}")
@@ -220,6 +262,7 @@ if st.session_state.analysis_done:
             "file_size_bytes": file_size,
             "total_conversations": len(summary["matrix"]),
             "analysis_time_seconds": total_time,
+            "uploaded_files": st.session_state.get("uploaded_files_metadata", []),
         },
     }
     debug_json = json.dumps(debug_info, ensure_ascii=False, indent=2)
