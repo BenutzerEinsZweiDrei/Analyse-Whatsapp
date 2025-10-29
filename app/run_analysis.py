@@ -19,7 +19,7 @@ from app.core.metrics import (
     calculate_topic_response_time,
 )
 from app.core.nouns import extract_nouns
-from app.core.parser import (
+from app.core.parsing import (
     merge_and_deduplicate_messages,
     parse_conversations_from_text,
 )

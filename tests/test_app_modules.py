@@ -15,7 +15,7 @@ from app.config import get_settings, mask_key
 from app.core.emojis import evaluate_emoji_string, extract_emojis
 from app.core.keywords import get_keywords_simple_tf
 from app.core.nouns import extract_nouns
-from app.core.parser import Message, parse_conversations
+from app.core.parsing import Message, parse_conversations
 from app.core.preprocessing import preprocess_text
 from app.core.sentiment import analyze_sentiment, sentiment_label_from_compound
 from app.data.loaders import load_json_asset

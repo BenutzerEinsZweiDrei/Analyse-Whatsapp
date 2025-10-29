@@ -21,9 +21,9 @@ from app.config import get_settings, mask_key
 from app.core.local_profile import merge_local_profiles, run_local_analysis
 from app.core.preprocessing import init_nltk
 from app.core.summarizer import summarize_matrix
-from app.logging_config import configure_logging, get_logs, set_debug_mode
+from app.utils.logging_config import configure_logging, get_logs, set_debug_mode
 from app.run_analysis import cached_run_analysis
-from app.services.g4f_client import generate_profile, handle_g4f_error
+from app.services.ai_provider import generate_profile, handle_g4f_error
 
 # ---------------------------
 # Initialize Application

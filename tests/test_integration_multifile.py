@@ -7,7 +7,7 @@ Tests the complete pipeline from file upload to analysis results.
 import unittest
 from unittest.mock import MagicMock, patch
 
-from app.core.parser import merge_and_deduplicate_messages, parse_conversations_from_text
+from app.core.parsing import merge_and_deduplicate_messages, parse_conversations_from_text
 from app.run_analysis import cached_run_analysis, run_analysis_multiple_files
 
 

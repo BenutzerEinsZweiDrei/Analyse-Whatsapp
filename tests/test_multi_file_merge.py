@@ -6,7 +6,7 @@ import os
 import unittest
 from pathlib import Path
 
-from app.core.parser import (
+from app.core.parsing import (
     merge_and_deduplicate_messages,
     parse_conversations_from_text,
 )
