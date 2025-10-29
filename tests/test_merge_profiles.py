@@ -4,11 +4,6 @@ Unit tests for merge_local_profiles function.
 Tests the merging of multiple per-file personality profile results.
 """
 
-try:
-    import pytest
-except ImportError:
-    pytest = None
-
 from app.core.local_profile import merge_local_profiles
 
 
@@ -187,7 +182,7 @@ def test_merge_with_error_profiles():
     result, text = merge_local_profiles(profiles_list)
     
     # Should only merge the valid profile
-    assert "error" not in result or "All profiles had errors" not in result.get("error", "")
+    assert "error" not in result
     assert result.get("merged_file_count") == 1
 
 
