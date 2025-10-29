@@ -8,3 +8,18 @@ requests
 regex
 gensim
 vaderSentiment
+
+# Optional dependencies for enhanced analysis
+# Install with: pip install -r requirements.txt
+# For best accuracy, install transformers and related packages
+emoji>=2.0.0
+langdetect>=1.0.9
+yake>=0.4.8
+keybert>=0.8.0
+transformers>=4.30.0
+torch>=2.0.0
+sentence-transformers>=2.2.0
+scikit-learn>=1.3.0
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0

@@ -67,9 +67,41 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+def _convert_numpy_types(obj: Any) -> Any:
+    """
+    Recursively convert numpy types to Python native types.
+    
+    Handles both keys and values in dicts, and elements in lists.
+    
+    Args:
+        obj: Object to convert
+    
+    Returns:
+        Converted object with Python native types
+    """
+    if HAS_NUMPY:
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+    
+    if isinstance(obj, dict):
+        # Convert both keys and values
+        return {str(k) if not isinstance(k, (str, int, float, bool, type(None))) else k: _convert_numpy_types(v) 
+                for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_convert_numpy_types(item) for item in obj]
+    else:
+        return obj
+
+
 def safe_json_dumps(data: Any, **kwargs) -> str:
     """
-    Safely dump data to JSON, handling numpy types.
+    Safely dump data to JSON, handling numpy types in keys and values.
 
     Args:
         data: Data to serialize
@@ -78,7 +110,10 @@ def safe_json_dumps(data: Any, **kwargs) -> str:
     Returns:
         JSON string
     """
-    return json.dumps(data, cls=NumpyEncoder, **kwargs)
+    # First convert numpy types (including dict keys)
+    converted_data = _convert_numpy_types(data)
+    # Then use JSON encoder for any remaining special types
+    return json.dumps(converted_data, cls=NumpyEncoder, **kwargs)
 
 
 # ---------------------------
