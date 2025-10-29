@@ -245,7 +245,7 @@ For best results, install optional dependencies:
 
 ```bash
 # Basic enhancements (recommended)
-pip install emoji langdetect yake
+pip install emoji langdetect yake scikit-learn
 
 # Advanced analysis (optional, large downloads)
 pip install transformers torch sentence-transformers keybert
