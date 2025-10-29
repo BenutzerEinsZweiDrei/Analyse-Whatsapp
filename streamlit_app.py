@@ -224,6 +224,7 @@ if st.session_state.files:
             for file_state in st.session_state.files:
                 if file_state["analysis_status"] not in ["success"]:
                     file_state["analysis_status"] = "queued"
+            st.session_state.process_queue = True
             st.rerun()
 
     with col2:
@@ -244,6 +245,7 @@ if st.session_state.files:
                     and file_state["local_profile"]["status"] != "success"
                 ):
                     file_state["local_profile"]["status"] = "queued"
+            st.session_state.process_queue = True
             st.rerun()
 
     with col3:
@@ -264,6 +266,7 @@ if st.session_state.files:
                     and file_state["ai_profile"]["status"] != "success"
                 ):
                     file_state["ai_profile"]["status"] = "queued"
+            st.session_state.process_queue = True
             st.rerun()
 
     with col4:
@@ -272,7 +275,7 @@ if st.session_state.files:
             1 for f in st.session_state.files if f["local_profile"]["status"] == "success"
         )
         if st.button(
-            f"🔀 Merge Personality Profiles ({files_with_local})",
+            f"🔀 Merge personality profiles ({files_with_local}) — Create final merged profile",
             key="merge_profiles",
             disabled=files_with_local < 2,
         ):
@@ -285,99 +288,126 @@ if st.session_state.files:
     if files_with_local >= 2 and not st.session_state.merged_profiles:
         st.info(
             f"✨ **Now we have {files_with_local} personality profiles — "
-            f"Click '🔀 Merge Personality Profiles' to create a final merged profile!**"
+            f"merge them into a big final one!**"
         )
 
-    # Track if we need to rerun after processing
-    state_changed = False
+    # Guard against re-entrancy during processing and only process if queue flag is set
+    should_process = st.session_state.get("process_queue", False) and not st.session_state.get(
+        "processing_pass", False
+    )
 
-    # Process queued analyses (batch process all queued items)
-    for file_state in st.session_state.files:
-        if file_state["analysis_status"] == "queued":
-            file_state["analysis_status"] = "running"
-            try:
-                with st.spinner(f"Analyzing {file_state['filename']}..."):
-                    start_time = time.time()
+    if should_process:
+        # Set processing flag and clear queue flag
+        st.session_state.processing_pass = True
+        st.session_state.process_queue = False
 
-                    # Run analysis for single file
-                    matrix, conversation_messages = cached_run_analysis(
-                        file_state["content"], st.session_state.username
+        # Track if we need to rerun after processing
+        state_changed = False
+
+        logger.info("Starting processing pass for queued items")
+
+        # Process queued analyses (batch process all queued items)
+        for file_state in st.session_state.files:
+            if file_state["analysis_status"] == "queued":
+                file_state["analysis_status"] = "running"
+                logger.info(f"Starting analysis for '{file_state['filename']}'")
+                try:
+                    with st.spinner(f"Analyzing {file_state['filename']}..."):
+                        start_time = time.time()
+
+                        # Run analysis for single file
+                        matrix, conversation_messages = cached_run_analysis(
+                            file_state["content"], st.session_state.username
+                        )
+
+                        # Summarize results
+                        summary = summarize_matrix(matrix)
+
+                        analysis_time = time.time() - start_time
+
+                        # Store results
+                        file_state["analysis"] = {
+                            "matrix": matrix,
+                            "summary": summary,
+                            "conversation_messages": conversation_messages,
+                        }
+                        file_state["analysis_status"] = "success"
+                        file_state["analysis_time"] = analysis_time
+                        state_changed = True
+
+                        logger.info(
+                            f"Analysis completed for '{file_state['filename']}' in {analysis_time:.2f}s"
+                        )
+
+                except Exception as e:
+                    logger.exception(f"Error analyzing '{file_state['filename']}': {e}")
+                    file_state["analysis_status"] = "error"
+                    file_state["analysis_error"] = str(e)
+                    state_changed = True
+
+        # Process queued local profiles (batch process all queued items)
+        for file_state in st.session_state.files:
+            if file_state["local_profile"]["status"] == "queued":
+                file_state["local_profile"]["status"] = "running"
+                logger.info(f"Starting local profile generation for '{file_state['filename']}'")
+                try:
+                    with st.spinner(f"Generating local profile for {file_state['filename']}..."):
+                        summary = file_state["analysis"]["summary"]
+                        matrix = file_state["analysis"]["matrix"]
+
+                        results, profile_text = run_local_analysis(summary, matrix)
+
+                        file_state["local_profile"]["results"] = results
+                        file_state["local_profile"]["profile_text"] = profile_text
+                        file_state["local_profile"]["status"] = "success"
+                        state_changed = True
+
+                        logger.info(
+                            f"Local profile generation completed for '{file_state['filename']}'"
+                        )
+
+                except Exception as e:
+                    logger.exception(
+                        f"Error generating local profile for '{file_state['filename']}': {e}"
                     )
-
-                    # Summarize results
-                    summary = summarize_matrix(matrix)
-
-                    analysis_time = time.time() - start_time
-
-                    # Store results
-                    file_state["analysis"] = {
-                        "matrix": matrix,
-                        "summary": summary,
-                        "conversation_messages": conversation_messages,
-                    }
-                    file_state["analysis_status"] = "success"
-                    file_state["analysis_time"] = analysis_time
+                    file_state["local_profile"]["status"] = "error"
+                    file_state["local_profile"]["error"] = str(e)
                     state_changed = True
 
-                    logger.info(
-                        f"Analysis completed for '{file_state['filename']}' in {analysis_time:.2f}s"
+        # Process queued AI profiles (batch process all queued items)
+        for file_state in st.session_state.files:
+            if file_state["ai_profile"]["status"] == "queued":
+                file_state["ai_profile"]["status"] = "running"
+                logger.info(f"Starting AI profile generation for '{file_state['filename']}'")
+                try:
+                    with st.spinner(f"Generating AI profile for {file_state['filename']}..."):
+                        response = generate_profile(file_state["analysis"]["summary"]["analysis"])
+
+                        file_state["ai_profile"]["response"] = response
+                        file_state["ai_profile"]["status"] = "success"
+                        state_changed = True
+
+                        logger.info(
+                            f"AI profile generation completed for '{file_state['filename']}'"
+                        )
+
+                except Exception as e:
+                    err_msg = handle_g4f_error(e)
+                    logger.exception(
+                        f"AI profile generation failed for '{file_state['filename']}': {err_msg}"
                     )
-
-            except Exception as e:
-                logger.exception(f"Error analyzing '{file_state['filename']}': {e}")
-                file_state["analysis_status"] = "error"
-                file_state["analysis_error"] = str(e)
-                state_changed = True
-
-    # Process queued local profiles (batch process all queued items)
-    for file_state in st.session_state.files:
-        if file_state["local_profile"]["status"] == "queued":
-            file_state["local_profile"]["status"] = "running"
-            try:
-                with st.spinner(f"Generating local profile for {file_state['filename']}..."):
-                    summary = file_state["analysis"]["summary"]
-                    matrix = file_state["analysis"]["matrix"]
-
-                    results, profile_text = run_local_analysis(summary, matrix)
-
-                    file_state["local_profile"]["results"] = results
-                    file_state["local_profile"]["profile_text"] = profile_text
-                    file_state["local_profile"]["status"] = "success"
+                    file_state["ai_profile"]["status"] = "error"
+                    file_state["ai_profile"]["error"] = err_msg
                     state_changed = True
 
-                    logger.info(f"Local profile generated for '{file_state['filename']}'")
+        # Clear processing flag
+        st.session_state.processing_pass = False
 
-            except Exception as e:
-                logger.exception(
-                    f"Error generating local profile for '{file_state['filename']}': {e}"
-                )
-                file_state["local_profile"]["status"] = "error"
-                file_state["local_profile"]["error"] = str(e)
-                state_changed = True
+        logger.info(f"Processing pass completed. State changed: {state_changed}")
 
-    # Process queued AI profiles (batch process all queued items)
-    for file_state in st.session_state.files:
-        if file_state["ai_profile"]["status"] == "queued":
-            file_state["ai_profile"]["status"] = "running"
-            try:
-                with st.spinner(f"Generating AI profile for {file_state['filename']}..."):
-                    response = generate_profile(file_state["analysis"]["summary"]["analysis"])
-
-                    file_state["ai_profile"]["response"] = response
-                    file_state["ai_profile"]["status"] = "success"
-                    state_changed = True
-
-                    logger.info(f"AI profile generated for '{file_state['filename']}'")
-
-            except Exception as e:
-                logger.exception(f"Error generating AI profile for '{file_state['filename']}': {e}")
-                file_state["ai_profile"]["status"] = "error"
-                file_state["ai_profile"]["error"] = handle_g4f_error(e)
-                state_changed = True
-
-    # Rerun once after all processing if state changed
-    if state_changed:
-        st.rerun()
+        # Rerun once after all processing if state changed
+        if state_changed:
+            st.rerun()
 
     # Handle merge request
     if st.session_state.get("merge_requested", False):

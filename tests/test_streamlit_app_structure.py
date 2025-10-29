@@ -159,9 +159,13 @@ def test_bulk_action_buttons_exist():
 
     # Check for bulk action buttons
     assert "Analyze All Files" in content, "Analyze All Files button not found"
-    assert "Generate Local Profiles for All" in content, "Generate Local Profiles for All button not found"
+    assert (
+        "Generate Local Profiles for All" in content
+    ), "Generate Local Profiles for All button not found"
     assert "Generate AI Profiles for All" in content, "Generate AI Profiles for All button not found"
-    assert "Merge Personality Profiles" in content, "Merge Personality Profiles button not found"
+    assert (
+        "Merge personality profiles" in content or "Merge Personality Profiles" in content
+    ), "Merge personality profiles button not found"
 
 
 def test_merge_cta_message_exists():
