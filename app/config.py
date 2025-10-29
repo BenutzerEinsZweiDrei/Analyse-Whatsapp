@@ -8,7 +8,6 @@ in a centralized, secure manner.
 import logging
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger("whatsapp_analyzer")
 
@@ -24,8 +23,8 @@ class Settings:
         debug_mode: Enable debug logging
     """
 
-    jina_api_key: Optional[str] = None
-    textrazor_api_key: Optional[str] = None
+    jina_api_key: str | None = None
+    textrazor_api_key: str | None = None
     debug_mode: bool = False
 
 
@@ -85,7 +84,7 @@ def get_settings() -> Settings:
     return settings
 
 
-def mask_key(key: Optional[str]) -> str:
+def mask_key(key: str | None) -> str:
     """
     Mask an API key for safe display in logs or UI.
 

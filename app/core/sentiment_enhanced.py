@@ -10,7 +10,6 @@ Combines multiple approaches:
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 from app.cache import cached_resource
 from app.core.sentiment import analyze_sentiment as vader_sentiment
@@ -47,9 +46,9 @@ class SentimentResult:
     method_used: str  # "vader", "ensemble", "transformer"
 
     # Additional details
-    vader_scores: Optional[Dict] = None
-    transformer_label: Optional[str] = None
-    transformer_score: Optional[float] = None
+    vader_scores: dict | None = None
+    transformer_label: str | None = None
+    transformer_score: float | None = None
 
 
 @cached_resource
@@ -73,7 +72,7 @@ def get_sentiment_pipeline():
         return None
 
 
-def emoji_sentiment_score(emojis: List[str]) -> Tuple[float, int]:
+def emoji_sentiment_score(emojis: list[str]) -> tuple[float, int]:
     """
     Calculate sentiment from emojis.
 
@@ -112,7 +111,7 @@ def emoji_sentiment_score(emojis: List[str]) -> Tuple[float, int]:
 
 def analyze_sentiment_ensemble(
     text: str,
-    emojis: Optional[List[str]] = None,
+    emojis: list[str] | None = None,
     use_transformer: bool = True,
 ) -> SentimentResult:
     """
@@ -251,10 +250,10 @@ def analyze_sentiment_ensemble(
 
 
 def batch_analyze_sentiment(
-    texts: List[str],
-    emojis_list: Optional[List[List[str]]] = None,
+    texts: list[str],
+    emojis_list: list[list[str]] | None = None,
     use_transformer: bool = True,
-) -> List[SentimentResult]:
+) -> list[SentimentResult]:
     """
     Analyze sentiment for multiple texts efficiently.
 

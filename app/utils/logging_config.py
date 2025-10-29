@@ -6,10 +6,9 @@ Provides centralized logging setup with in-memory buffer for Streamlit UI displa
 
 import io
 import logging
-from typing import Optional
 
 # Global memory buffer for logs (accessible by Streamlit UI)
-_log_stream: Optional[io.StringIO] = None
+_log_stream: io.StringIO | None = None
 _logger_initialized = False
 
 

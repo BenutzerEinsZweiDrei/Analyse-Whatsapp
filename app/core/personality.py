@@ -4,10 +4,8 @@ Provides rule-based Big Five (OCEAN) trait estimation, MBTI mapping,
 and enhanced emotion analysis without ML/AI models.
 """
 
-import json
 import logging
 from collections import Counter
-from typing import Dict, List, Tuple
 
 logger = logging.getLogger("whatsapp_analyzer")
 
@@ -150,7 +148,7 @@ EMOJI_PERSONALITY_MAP = {
 }
 
 
-def calculate_big_five_scores(text: str, emojis: List[str]) -> Dict[str, float]:
+def calculate_big_five_scores(text: str, emojis: list[str]) -> dict[str, float]:
     """
     Calculate Big Five personality trait scores based on lexical and emoji indicators.
 
@@ -231,7 +229,7 @@ def calculate_big_five_scores(text: str, emojis: List[str]) -> Dict[str, float]:
     return scores
 
 
-def map_big_five_to_mbti(big_five: Dict[str, float]) -> str:
+def map_big_five_to_mbti(big_five: dict[str, float]) -> str:
     """
     Map Big Five personality scores to MBTI type using rule-based heuristics.
 
@@ -341,7 +339,7 @@ EMOJI_EMOTION_MAP = {
 }
 
 
-def classify_emotion_from_emojis(emojis: List[str]) -> Dict[str, float]:
+def classify_emotion_from_emojis(emojis: list[str]) -> dict[str, float]:
     """
     Classify emotions based on emoji usage.
 
@@ -375,7 +373,7 @@ def classify_emotion_from_emojis(emojis: List[str]) -> Dict[str, float]:
     return emotion_ratios
 
 
-def get_dominant_emotion(emotion_ratios: Dict[str, float]) -> str:
+def get_dominant_emotion(emotion_ratios: dict[str, float]) -> str:
     """
     Get the dominant emotion from emotion ratios.
 
@@ -414,7 +412,7 @@ def classify_emotion_from_sentiment(sentiment_score: float) -> str:
         return "distress"
 
 
-def calculate_emotion_analysis(emojis: List[str], sentiment_score: float) -> Dict:
+def calculate_emotion_analysis(emojis: list[str], sentiment_score: float) -> dict:
     """
     Comprehensive emotion analysis combining emoji and sentiment data.
 

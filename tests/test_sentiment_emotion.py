@@ -4,16 +4,16 @@ Unit tests for enhanced sentiment and emotion detection.
 
 import pytest
 
-from app.core.sentiment_enhanced import (
-    analyze_sentiment_ensemble,
-    emoji_sentiment_score,
-    batch_analyze_sentiment,
-)
 from app.core.emotion_detection import (
+    batch_detect_emotion,
     detect_emotion,
     emoji_emotion_mapping,
     lexicon_based_emotion,
-    batch_detect_emotion,
+)
+from app.core.sentiment_enhanced import (
+    analyze_sentiment_ensemble,
+    batch_analyze_sentiment,
+    emoji_sentiment_score,
 )
 
 

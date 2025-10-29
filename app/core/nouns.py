@@ -6,7 +6,6 @@ Extracts and filters meaningful nouns from text using POS tagging.
 
 import logging
 from collections import Counter
-from typing import List
 
 from nltk.tag import pos_tag
 
@@ -15,7 +14,7 @@ from app.core.preprocessing import init_nltk, preprocess_text
 logger = logging.getLogger("whatsapp_analyzer")
 
 
-def extract_nouns(text: str, max_nouns: int = 20) -> List[str]:
+def extract_nouns(text: str, max_nouns: int = 20) -> list[str]:
     """
     Extract meaningful nouns from text with improved filtering.
 

@@ -7,7 +7,7 @@ and fall back to functools.lru_cache for testing/non-Streamlit contexts.
 
 import functools
 import logging
-from typing import Any, Callable
+from collections.abc import Callable
 
 logger = logging.getLogger("whatsapp_analyzer")
 

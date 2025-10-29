@@ -6,7 +6,6 @@ Provides tokenization, stopword removal, and lemmatization for text analysis.
 
 import logging
 import string
-from typing import List, Set
 
 import nltk
 from nltk.stem import WordNetLemmatizer
@@ -20,7 +19,7 @@ logger = logging.getLogger("whatsapp_analyzer")
 _nltk_resources_initialized = False
 
 
-def init_nltk(resources: List[str] = None):
+def init_nltk(resources: list[str] = None):
     """
     Initialize NLTK resources by downloading required data.
 
@@ -46,7 +45,7 @@ def init_nltk(resources: List[str] = None):
             "wordnet",
             "stopwords",
             "omw-1.4",
-            "averaged_perceptron_tagger_eng"
+            "averaged_perceptron_tagger_eng",
         ]
 
     for res in resources:
@@ -66,8 +65,8 @@ def init_nltk(resources: List[str] = None):
 
 
 def preprocess_text(
-    text: str, lang: str = "german", extra_stopwords: List[str] = None
-) -> List[str]:
+    text: str, lang: str = "german", extra_stopwords: list[str] = None
+) -> list[str]:
     """
     Preprocess text for analysis.
 
@@ -151,7 +150,7 @@ def preprocess_text(
     return tokens
 
 
-def preprocess(text: str) -> List[str]:
+def preprocess(text: str) -> list[str]:
     """
     Legacy function for backward compatibility.
 

@@ -9,7 +9,6 @@ Provides emotion classification using:
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("whatsapp_analyzer.emotion_detection")
 
@@ -43,14 +42,14 @@ class EmotionResult:
     primary_score: float  # 0 to 1
 
     # All emotion scores
-    emotion_scores: Dict[str, float]
+    emotion_scores: dict[str, float]
 
     # Confidence
     confidence: float  # 0 to 1
     method_used: str  # "lexicon", "transformer", "ensemble"
 
     # Additional details
-    transformer_details: Optional[Dict] = None
+    transformer_details: dict | None = None
 
 
 @cached_resource
@@ -80,7 +79,7 @@ def get_emotion_pipeline():
         return None
 
 
-def emoji_emotion_mapping(emojis: List[str]) -> Dict[str, float]:
+def emoji_emotion_mapping(emojis: list[str]) -> dict[str, float]:
     """
     Map emojis to emotion scores.
 
@@ -132,7 +131,7 @@ def emoji_emotion_mapping(emojis: List[str]) -> Dict[str, float]:
         "🤯": "surprise",
     }
 
-    emotion_counts = {emotion: 0 for emotion in EMOTION_LABELS}
+    emotion_counts = dict.fromkeys(EMOTION_LABELS, 0)
 
     for emoji in emojis:
         if emoji in emoji_map:
@@ -144,12 +143,12 @@ def emoji_emotion_mapping(emojis: List[str]) -> Dict[str, float]:
     if total > 0:
         emotion_scores = {k: v / total for k, v in emotion_counts.items()}
     else:
-        emotion_scores = {emotion: 0.0 for emotion in EMOTION_LABELS}
+        emotion_scores = dict.fromkeys(EMOTION_LABELS, 0.0)
 
     return emotion_scores
 
 
-def lexicon_based_emotion(text: str, emojis: Optional[List[str]] = None) -> Dict[str, float]:
+def lexicon_based_emotion(text: str, emojis: list[str] | None = None) -> dict[str, float]:
     """
     Detect emotions using lexicon-based approach.
 
@@ -227,7 +226,7 @@ def lexicon_based_emotion(text: str, emojis: Optional[List[str]] = None) -> Dict
     }
 
     text_lower = text.lower()
-    emotion_scores = {emotion: 0 for emotion in EMOTION_LABELS}
+    emotion_scores = dict.fromkeys(EMOTION_LABELS, 0)
 
     # Count keyword matches
     for emotion, keywords in emotion_keywords.items():
@@ -254,7 +253,7 @@ def lexicon_based_emotion(text: str, emojis: Optional[List[str]] = None) -> Dict
 
 def detect_emotion(
     text: str,
-    emojis: Optional[List[str]] = None,
+    emojis: list[str] | None = None,
     use_transformer: bool = True,
 ) -> EmotionResult:
     """
@@ -343,10 +342,10 @@ def detect_emotion(
 
 
 def batch_detect_emotion(
-    texts: List[str],
-    emojis_list: Optional[List[List[str]]] = None,
+    texts: list[str],
+    emojis_list: list[list[str]] | None = None,
     use_transformer: bool = True,
-) -> List[EmotionResult]:
+) -> list[EmotionResult]:
     """
     Detect emotions for multiple texts efficiently.
 

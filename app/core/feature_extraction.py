@@ -11,10 +11,9 @@ Extracts comprehensive per-message metadata including:
 
 import logging
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
-from collections import Counter
 
 logger = logging.getLogger("whatsapp_analyzer.feature_extraction")
 
@@ -28,7 +27,7 @@ except ImportError:
     logger.warning("emoji library not available - emoji normalization will be limited")
 
 try:
-    from langdetect import detect, LangDetectException
+    from langdetect import LangDetectException, detect
 
     HAS_LANGDETECT = True
 except ImportError:
@@ -42,15 +41,15 @@ class MessageFeatures:
 
     # Identity
     message_id: int
-    author: Optional[str]
+    author: str | None
     is_system: bool
     is_media: bool
 
     # Temporal
-    timestamp: Optional[datetime]
-    timestamp_utc: Optional[str]  # ISO format
-    time_of_day_hour: Optional[int]
-    day_of_week: Optional[int]
+    timestamp: datetime | None
+    timestamp_utc: str | None  # ISO format
+    time_of_day_hour: int | None
+    day_of_week: int | None
 
     # Text content
     text: str
@@ -77,21 +76,21 @@ class MessageFeatures:
     exclamation_marks: int
 
     # Parsed elements
-    emojis: List[str] = field(default_factory=list)
-    emoji_descriptors: List[str] = field(default_factory=list)
-    urls: List[str] = field(default_factory=list)
-    mentions: List[str] = field(default_factory=list)
+    emojis: list[str] = field(default_factory=list)
+    emoji_descriptors: list[str] = field(default_factory=list)
+    urls: list[str] = field(default_factory=list)
+    mentions: list[str] = field(default_factory=list)
 
     # Language
-    detected_language: Optional[str] = None
-    language_confidence: Optional[float] = None
+    detected_language: str | None = None
+    language_confidence: float | None = None
 
     # Reply indicators
     has_reply_indicator: bool = False
-    reply_to: Optional[str] = None
+    reply_to: str | None = None
 
 
-def extract_emojis_from_text(text: str) -> Tuple[List[str], List[str]]:
+def extract_emojis_from_text(text: str) -> tuple[list[str], list[str]]:
     """
     Extract emojis and their descriptive names from text.
 
@@ -121,7 +120,7 @@ def extract_emojis_from_text(text: str) -> Tuple[List[str], List[str]]:
     return emoji_list, descriptors
 
 
-def detect_language(text: str) -> Tuple[Optional[str], Optional[float]]:
+def detect_language(text: str) -> tuple[str | None, float | None]:
     """
     Detect language of text.
 
@@ -175,7 +174,7 @@ def count_emoticons(text: str) -> int:
     return count
 
 
-def extract_urls(text: str) -> List[str]:
+def extract_urls(text: str) -> list[str]:
     """
     Extract URLs from text.
 
@@ -191,7 +190,7 @@ def extract_urls(text: str) -> List[str]:
     return url_pattern.findall(text)
 
 
-def calculate_lexical_diversity(words: List[str]) -> float:
+def calculate_lexical_diversity(words: list[str]) -> float:
     """
     Calculate lexical diversity (type-token ratio).
 
@@ -210,7 +209,7 @@ def calculate_lexical_diversity(words: List[str]) -> float:
     return unique_words / total_words if total_words > 0 else 0.0
 
 
-def calculate_stopword_ratio(words: List[str]) -> float:
+def calculate_stopword_ratio(words: list[str]) -> float:
     """
     Calculate ratio of stopwords to total words.
 
@@ -282,9 +281,7 @@ def calculate_stopword_ratio(words: List[str]) -> float:
         "werden",
         "wird",
         "wurde",
-        "in",
         "auf",
-        "an",
         "zu",
         "von",
         "mit",
@@ -310,9 +307,9 @@ def calculate_stopword_ratio(words: List[str]) -> float:
 
 def extract_message_features(
     message_id: int,
-    author: Optional[str],
+    author: str | None,
     text: str,
-    timestamp: Optional[datetime] = None,
+    timestamp: datetime | None = None,
     is_system: bool = False,
     is_media: bool = False,
 ) -> MessageFeatures:
@@ -435,7 +432,7 @@ def extract_message_features(
     )
 
 
-def aggregate_language_stats(features: List[MessageFeatures]) -> Dict[str, int]:
+def aggregate_language_stats(features: list[MessageFeatures]) -> dict[str, int]:
     """
     Aggregate language statistics across messages.
 
@@ -454,7 +451,7 @@ def aggregate_language_stats(features: List[MessageFeatures]) -> Dict[str, int]:
     return dict(lang_counter)
 
 
-def get_dominant_language(features: List[MessageFeatures]) -> Optional[str]:
+def get_dominant_language(features: list[MessageFeatures]) -> str | None:
     """
     Get the dominant language across all messages.
 

@@ -9,10 +9,9 @@ Provides multiple methods for extracting topics and keywords:
 """
 
 import logging
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
-from collections import Counter
 import re
+from collections import Counter
+from dataclasses import dataclass
 
 logger = logging.getLogger("whatsapp_analyzer.topic_extraction")
 
@@ -46,13 +45,13 @@ class TopicResult:
     """Topic extraction result."""
 
     # Top keywords
-    keywords: List[Tuple[str, float]]  # (keyword, score)
+    keywords: list[tuple[str, float]]  # (keyword, score)
 
     # Topic coherence
-    coherence_score: Optional[float]
+    coherence_score: float | None
 
     # Representative messages
-    representative_messages: List[Dict]  # [{message_id, snippet}]
+    representative_messages: list[dict]  # [{message_id, snippet}]
 
     # Method used
     method: str  # "tfidf", "yake", "keybert", "ensemble"
@@ -77,7 +76,7 @@ def get_keybert_model():
         return None
 
 
-def simple_tfidf_keywords(texts: List[str], top_n: int = 10) -> List[Tuple[str, float]]:
+def simple_tfidf_keywords(texts: list[str], top_n: int = 10) -> list[tuple[str, float]]:
     """
     Extract keywords using simple TF-IDF approach.
 
@@ -121,7 +120,7 @@ def simple_tfidf_keywords(texts: List[str], top_n: int = 10) -> List[Tuple[str, 
     return sorted_keywords[:top_n]
 
 
-def extract_keywords_yake(text: str, top_n: int = 10) -> List[Tuple[str, float]]:
+def extract_keywords_yake(text: str, top_n: int = 10) -> list[tuple[str, float]]:
     """
     Extract keywords using YAKE.
 
@@ -153,7 +152,7 @@ def extract_keywords_yake(text: str, top_n: int = 10) -> List[Tuple[str, float]]
         return []
 
 
-def extract_keywords_keybert(text: str, top_n: int = 10) -> List[Tuple[str, float]]:
+def extract_keywords_keybert(text: str, top_n: int = 10) -> list[tuple[str, float]]:
     """
     Extract keywords using KeyBERT.
 
@@ -187,8 +186,8 @@ def extract_keywords_keybert(text: str, top_n: int = 10) -> List[Tuple[str, floa
 
 
 def extract_topics(
-    texts: List[str],
-    message_ids: Optional[List[int]] = None,
+    texts: list[str],
+    message_ids: list[int] | None = None,
     top_n: int = 10,
     use_advanced: bool = True,
 ) -> TopicResult:
@@ -252,9 +251,7 @@ def extract_topics(
     )
 
 
-def calculate_keyword_coherence(
-    keywords: List[Tuple[str, float]], texts: List[str]
-) -> float:
+def calculate_keyword_coherence(keywords: list[tuple[str, float]], texts: list[str]) -> float:
     """
     Calculate coherence score for keywords.
 
@@ -295,11 +292,11 @@ def calculate_keyword_coherence(
 
 
 def find_representative_messages(
-    keywords: List[Tuple[str, float]],
-    texts: List[str],
-    message_ids: Optional[List[int]],
+    keywords: list[tuple[str, float]],
+    texts: list[str],
+    message_ids: list[int] | None,
     top_k: int = 3,
-) -> List[Dict]:
+) -> list[dict]:
     """
     Find messages that best represent the topics.
 
@@ -332,15 +329,17 @@ def find_representative_messages(
 
     # Sort by score and return top K
     message_scores.sort(key=lambda x: x["score"], reverse=True)
-    return [{"message_id": m["message_id"], "snippet": m["snippet"]} for m in message_scores[:top_k]]
+    return [
+        {"message_id": m["message_id"], "snippet": m["snippet"]} for m in message_scores[:top_k]
+    ]
 
 
 def aggregate_topics_by_sentiment(
-    texts: List[str],
-    sentiments: List[str],
-    message_ids: Optional[List[int]] = None,
+    texts: list[str],
+    sentiments: list[str],
+    message_ids: list[int] | None = None,
     top_n: int = 5,
-) -> Dict[str, TopicResult]:
+) -> dict[str, TopicResult]:
     """
     Extract topics separately for each sentiment category.
 

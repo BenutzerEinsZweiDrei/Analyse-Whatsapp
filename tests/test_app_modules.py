@@ -260,7 +260,7 @@ class TestSecurityNoHardcodedKeys(unittest.TestCase):
 
     def test_no_hardcoded_keys_in_streamlit_app(self):
         """Ensure no hard-coded API keys in streamlit_app.py."""
-        with open("streamlit_app.py", "r") as f:
+        with open("streamlit_app.py") as f:
             content = f.read()
 
         # Check for patterns that might indicate hard-coded keys
@@ -277,7 +277,7 @@ class TestSecurityNoHardcodedKeys(unittest.TestCase):
 
     def test_no_hardcoded_keys_in_config(self):
         """Ensure no hard-coded API keys in app/config.py."""
-        with open("app/config.py", "r") as f:
+        with open("app/config.py") as f:
             content = f.read()
 
         # Check patterns
