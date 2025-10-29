@@ -2,8 +2,11 @@
 
 A Streamlit-based application to analyze WhatsApp chat conversations using sentiment analysis, personality profiling, and emotional metrics.
 
+> **📢 Update (October 2025)**: The separate Profile Fusion page has been deprecated. The main app now supports uploading and merging 1-5 WhatsApp export files directly! See [Usage](#usage) for details.
+
 ## Features
 
+- **Multi-File Support**: Upload and merge 1-5 WhatsApp export files automatically (NEW!)
 - **Sentiment Analysis**: Analyze the emotional tone of conversations using VADER sentiment analysis
 - **Personality Profiling**: Calculate Big Five (OCEAN) personality traits and MBTI types
 - **Emotion Analysis**: Detect and categorize emotions from text and emojis
@@ -89,16 +92,30 @@ Run the Streamlit app:
 streamlit run streamlit_app.py
 ```
 
-1. Upload a WhatsApp chat export file (`.txt` format)
+### Single or Multiple File Analysis
+
+The app now supports analyzing **1-5 WhatsApp export files** in a single analysis:
+
+1. Upload one or multiple WhatsApp chat export files (`.txt` format, max 5 files)
+   - Multiple files will be automatically merged and deduplicated
+   - Useful for split exports or continuation of chats
 2. Enter the username you want to analyze
 3. Click "Start Analysis" to process the conversations
 4. View the analysis results including:
    - Positive and negative topics
    - Emotional variability
    - Per-conversation metrics
+   - File origin metadata for each conversation
 5. Generate a psychological profile:
    - **Local Profile**: Click "Generate Local Psychological Profile" for a deterministic, privacy-focused analysis
    - **AI Profile**: Click "Generate Psychological Profile with AI" for an AI-generated summary (requires internet)
+
+### Multi-File Merge Features
+
+- **Automatic Merging**: Messages from all files are combined chronologically
+- **Deduplication**: Duplicate messages (same timestamp, sender, and text) are automatically removed
+- **File Tracking**: Each conversation includes metadata about which file(s) it originated from
+- **Encoding Support**: Each file can use different encoding (UTF-8 or Latin-1)
 
 ## Exporting WhatsApp Chats
 
@@ -110,6 +127,8 @@ To export a WhatsApp chat:
 4. Select "More" → "Export chat"
 5. Choose "Without Media"
 6. Save the `.txt` file and upload it to the analyzer
+
+**Tip**: If you have a long chat history, WhatsApp may split it into multiple files. You can now upload all parts at once, and they will be merged automatically!
 
 ## Development
 
@@ -154,6 +173,38 @@ isort .
 - **Testing**: Add tests for new functionality
 - **Security**: Never commit API keys or secrets
 
+## Troubleshooting
+
+### Multiple File Upload Issues
+
+**Problem**: Uploaded files show encoding errors
+- **Solution**: The app automatically tries UTF-8 first, then falls back to Latin-1. Check that your files are valid WhatsApp exports.
+
+**Problem**: Duplicate messages after merge
+- **Solution**: This is expected behavior. The app automatically deduplicates messages with identical timestamp, sender, and text.
+
+**Problem**: Messages out of chronological order
+- **Solution**: The app automatically sorts merged messages by timestamp. If timestamps are missing or invalid in the original export, those messages may appear at the end.
+
+**Problem**: Analysis takes too long with multiple files
+- **Solution**: Large combined chats (50,000+ messages) may take several minutes. Consider analyzing shorter time periods or specific conversations.
+
+### File Format Issues
+
+**Problem**: "Could not parse conversations" error
+- **Solution**: Ensure your file follows WhatsApp's export format: `DD.MM.YY, HH:MM - Username: Message`
+
+**Problem**: Wrong encoding detected
+- **Solution**: Check the file info display after upload. If encoding is incorrect, re-export the chat from WhatsApp.
+
+### General Issues
+
+**Problem**: API key errors for topic classification
+- **Solution**: Topic classification requires a Jina AI API key. Without it, topics will show as "no topic" but all other analysis continues.
+
+**Problem**: Memory errors with large chats
+- **Solution**: Try splitting very large chats into smaller time periods before export, or increase available system memory.
+
 ## Local Profile Generation
 
 The local profile generator (`app/core/local_profile.py`) provides a comprehensive analysis pipeline that runs entirely on your machine without external API calls:
@@ -187,6 +238,33 @@ pip install pandas numpy scipy scikit-learn
 
 The local analysis works without these libraries but with reduced statistical capabilities.
 
+## Migration from Profile Fusion
+
+**If you previously used the separate "Profile Fusion" page:**
+
+The Profile Fusion page has been deprecated and integrated into the main app. Here's what changed:
+
+**Before (Old Workflow)**:
+1. Analyze each file separately in the main app
+2. Download JSON results for each file
+3. Go to Profile Fusion page
+4. Upload multiple JSON files
+5. Merge and analyze
+
+**Now (New Workflow)**:
+1. Upload 1-5 WhatsApp .txt files directly in the main app
+2. Files are automatically merged, deduplicated, and analyzed
+3. Get results immediately - no separate fusion step needed
+
+**Benefits of the new approach**:
+- Simpler workflow (one step instead of multiple)
+- Faster processing (no need to save/load intermediate JSON files)
+- Better deduplication (works at message level, not conversation level)
+- File origin tracking (know which file each message came from)
+- Maintains all existing analysis features
+
+The Profile Fusion page now shows a deprecation notice directing users to the main app.
+
 ## Testing
 
 The project includes comprehensive test coverage:
@@ -195,6 +273,7 @@ The project includes comprehensive test coverage:
 tests/
 ├── test_app_modules.py              # Unit tests for app/ modules (25 tests)
 ├── test_local_profile_generator.py  # Local profile tests (12 tests)
+├── test_multi_file_merge.py         # Multi-file merge tests (7 tests)
 └── test_integration.py              # Integration tests
 ```
 
@@ -203,7 +282,7 @@ Run tests:
 python -m unittest discover tests/ -v
 ```
 
-All 37 tests should pass.
+All tests should pass.
 
 ## CI/CD
 

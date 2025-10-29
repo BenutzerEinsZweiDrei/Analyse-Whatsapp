@@ -24,6 +24,7 @@ class Message:
         time: Time string from original export (e.g., "14:30")
         user: Username of sender (or None for system messages)
         message: Message text content
+        file_origin: Optional filename indicating source file
     """
 
     datetime: Optional[str]
@@ -31,6 +32,7 @@ class Message:
     time: str
     user: Optional[str]
     message: str
+    file_origin: Optional[str] = None
 
 
 def parse_conversations(text: str) -> List[List[Message]]:
@@ -145,7 +147,7 @@ def _parse_datetime(date_str: str, time_str: str) -> Optional[datetime]:
     return None
 
 
-def parse_conversations_from_text(text: str) -> List[List[dict]]:
+def parse_conversations_from_text(text: str, file_origin: Optional[str] = None) -> List[List[dict]]:
     """
     Legacy function for backward compatibility.
 
@@ -153,6 +155,7 @@ def parse_conversations_from_text(text: str) -> List[List[dict]]:
 
     Args:
         text: Raw WhatsApp chat export text
+        file_origin: Optional filename to track message source
 
     Returns:
         List of conversations, where each conversation is a list of message dicts
@@ -171,8 +174,69 @@ def parse_conversations_from_text(text: str) -> List[List[dict]]:
                     "time": msg.time,
                     "user": msg.user,
                     "message": msg.message,
+                    "file_origin": file_origin or msg.file_origin,
                 }
             )
         result.append(conv_dicts)
 
     return result
+
+
+def merge_and_deduplicate_messages(
+    all_conversations: List[List[List[dict]]],
+) -> List[List[dict]]:
+    """
+    Merge multiple conversation lists and deduplicate messages.
+
+    Takes conversations from multiple files, flattens them into a single message list,
+    sorts by datetime, and removes duplicates based on (datetime, user, message).
+
+    Args:
+        all_conversations: List of conversation lists from different files
+
+    Returns:
+        List of conversations (merged and deduplicated)
+    """
+    logger.info(f"Merging {len(all_conversations)} file conversation lists")
+
+    # Flatten all conversations into a single message list
+    all_messages = []
+    for file_convs in all_conversations:
+        for conv in file_convs:
+            all_messages.extend(conv)
+
+    logger.debug(f"Total messages before deduplication: {len(all_messages)}")
+
+    # Sort by datetime (None values last)
+    all_messages.sort(key=lambda m: (m.get("datetime") or "9999", m.get("user") or "zzz"))
+
+    # Deduplicate based on (datetime, user, message)
+    seen = set()
+    deduplicated_messages = []
+    duplicate_count = 0
+
+    for msg in all_messages:
+        # Create hash key for deduplication
+        key = (
+            msg.get("datetime"),
+            msg.get("user"),
+            msg.get("message", "").strip(),
+        )
+
+        if key not in seen:
+            deduplicated_messages.append(msg)
+            seen.add(key)
+        else:
+            duplicate_count += 1
+
+    logger.info(
+        f"Deduplication complete: {len(deduplicated_messages)} unique messages, "
+        f"{duplicate_count} duplicates removed"
+    )
+
+    # Re-split into conversations based on blank line logic
+    # For now, treat all merged messages as one conversation
+    # since blank lines were lost during merge
+    if deduplicated_messages:
+        return [deduplicated_messages]
+    return []

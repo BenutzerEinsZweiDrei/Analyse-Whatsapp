@@ -1,0 +1,6 @@
+23.01.21, 14:30 - Alice: Hello Bob!
+23.01.21, 14:31 - Bob: Hi Alice, how are you?
+23.01.21, 14:32 - Alice: I'm doing great, thanks!
+
+23.01.21, 15:00 - Alice: Did you see the movie yesterday?
+23.01.21, 15:01 - Bob: Yes! It was amazing!
