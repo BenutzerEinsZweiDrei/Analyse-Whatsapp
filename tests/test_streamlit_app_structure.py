@@ -9,6 +9,20 @@ import ast
 import os
 from pathlib import Path
 
+# Constants for code analysis
+CONTEXT_SEARCH_LINES = 30  # Number of lines to look back for loop context
+CONTEXT_DISPLAY_CHARS = 200  # Number of characters to display in error messages
+
+# Processing loop indicators that identify problematic rerun locations
+PROCESSING_LOOP_INDICATORS = [
+    "# Process queued analyses",
+    "# Process queued local profiles",
+    "# Process queued AI profiles",
+    'if file_state["analysis_status"] == "queued"',
+    'if file_state["local_profile"]["status"] == "queued"',
+    'if file_state["ai_profile"]["status"] == "queued"',
+]
+
 
 class RerunVisitor(ast.NodeVisitor):
     """AST visitor to find st.rerun() calls and their context."""
@@ -78,7 +92,7 @@ def test_no_rerun_in_processing_loops():
     """
     # Read the streamlit_app.py file
     app_file = Path(__file__).parent.parent / "streamlit_app.py"
-    with open(app_file, "r") as f:
+    with open(app_file) as f:
         content = f.read()
         lines = content.split("\n")
 
@@ -95,28 +109,21 @@ def test_no_rerun_in_processing_loops():
         line_num = call["line"]
         # Get the line and surrounding context
         if line_num > 0 and line_num <= len(lines):
-            # Look at the previous 30 lines to find the loop context
-            context_start = max(0, line_num - 30)
+            # Look at the previous lines to find the loop context
+            context_start = max(0, line_num - CONTEXT_SEARCH_LINES)
             context_lines = lines[context_start:line_num]
             context = "\n".join(context_lines)
 
             # Check if this rerun is in a processing loop
-            processing_loop_indicators = [
-                "# Process queued analyses",
-                "# Process queued local profiles",
-                "# Process queued AI profiles",
-                'if file_state["analysis_status"] == "queued"',
-                'if file_state["local_profile"]["status"] == "queued"',
-                'if file_state["ai_profile"]["status"] == "queued"',
-            ]
-
-            is_in_processing_loop = any(indicator in context for indicator in processing_loop_indicators)
+            is_in_processing_loop = any(
+                indicator in context for indicator in PROCESSING_LOOP_INDICATORS
+            )
 
             if is_in_processing_loop and call["in_loop"]:
                 problematic_calls.append(
                     {
                         "line": line_num,
-                        "context": context[-200:],  # Last 200 chars of context
+                        "context": context[-CONTEXT_DISPLAY_CHARS:],  # Last N chars of context
                     }
                 )
 
@@ -131,7 +138,7 @@ def test_state_changed_flag_exists():
     Test that state_changed flag is used to batch rerun calls.
     """
     app_file = Path(__file__).parent.parent / "streamlit_app.py"
-    with open(app_file, "r") as f:
+    with open(app_file) as f:
         content = f.read()
 
     # Check for state_changed flag
@@ -147,7 +154,7 @@ def test_bulk_action_buttons_exist():
     Test that bulk action buttons are present in the app.
     """
     app_file = Path(__file__).parent.parent / "streamlit_app.py"
-    with open(app_file, "r") as f:
+    with open(app_file) as f:
         content = f.read()
 
     # Check for bulk action buttons
@@ -162,7 +169,7 @@ def test_merge_cta_message_exists():
     Test that merge CTA message is shown when 2+ profiles exist.
     """
     app_file = Path(__file__).parent.parent / "streamlit_app.py"
-    with open(app_file, "r") as f:
+    with open(app_file) as f:
         content = f.read()
 
     # Check for merge CTA
@@ -175,9 +182,28 @@ def test_merge_cta_message_exists():
 
 
 if __name__ == "__main__":
-    # Run tests
-    test_no_rerun_in_processing_loops()
-    test_state_changed_flag_exists()
-    test_bulk_action_buttons_exist()
-    test_merge_cta_message_exists()
-    print("✅ All structure tests passed!")
+    # Run tests with proper error handling
+    tests = [
+        ("no_rerun_in_processing_loops", test_no_rerun_in_processing_loops),
+        ("state_changed_flag_exists", test_state_changed_flag_exists),
+        ("bulk_action_buttons_exist", test_bulk_action_buttons_exist),
+        ("merge_cta_message_exists", test_merge_cta_message_exists),
+    ]
+
+    failed = []
+    for name, test_func in tests:
+        try:
+            test_func()
+            print(f"✅ test_{name} passed")
+        except AssertionError as e:
+            print(f"❌ test_{name} failed: {e}")
+            failed.append(name)
+        except Exception as e:
+            print(f"💥 test_{name} error: {e}")
+            failed.append(name)
+
+    if not failed:
+        print("\n✅ All structure tests passed!")
+    else:
+        print(f"\n❌ {len(failed)} test(s) failed: {', '.join(failed)}")
+        exit(1)
