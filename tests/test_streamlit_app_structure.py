@@ -144,9 +144,7 @@ def test_state_changed_flag_exists():
     # Check for state_changed flag
     assert "state_changed = False" in content, "state_changed flag initialization not found"
     assert "state_changed = True" in content, "state_changed flag update not found"
-    assert (
-        "if state_changed:" in content
-    ), "state_changed conditional check for rerun not found"
+    assert "if state_changed:" in content, "state_changed conditional check for rerun not found"
 
 
 def test_bulk_action_buttons_exist():
@@ -162,7 +160,9 @@ def test_bulk_action_buttons_exist():
     assert (
         "Generate Local Profiles for All" in content
     ), "Generate Local Profiles for All button not found"
-    assert "Generate AI Profiles for All" in content, "Generate AI Profiles for All button not found"
+    assert (
+        "Generate AI Profiles for All" in content
+    ), "Generate AI Profiles for All button not found"
     assert (
         "Merge personality profiles" in content or "Merge Personality Profiles" in content
     ), "Merge personality profiles button not found"
@@ -180,9 +180,7 @@ def test_merge_cta_message_exists():
     assert (
         "Now we have" in content and "personality profiles" in content
     ), "Merge CTA message not found"
-    assert (
-        "files_with_local >= 2" in content
-    ), "Merge CTA condition check not found"
+    assert "files_with_local >= 2" in content, "Merge CTA condition check not found"
 
 
 if __name__ == "__main__":

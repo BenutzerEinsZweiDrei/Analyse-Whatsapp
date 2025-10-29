@@ -8,8 +8,7 @@ with explicit error handling.
 import json
 import logging
 import os
-from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger("whatsapp_analyzer")
 
@@ -46,7 +45,7 @@ def load_json_asset(filepath: str, description: str = "asset") -> Any:
 
         logger.debug(f"Loading {description} from {filepath}")
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             data = json.load(f)
 
         logger.debug(f"Successfully loaded {description} ({len(str(data))} bytes)")
@@ -66,7 +65,7 @@ def load_json_asset(filepath: str, description: str = "asset") -> Any:
         raise
 
 
-def load_stopwords(filepath: str = "stwd.json") -> List[str]:
+def load_stopwords(filepath: str = "stwd.json") -> list[str]:
     """
     Load stopwords from JSON file.
 
@@ -90,7 +89,7 @@ def load_stopwords(filepath: str = "stwd.json") -> List[str]:
             stopwords = data["stopwords"]
         else:
             raise ValueError(
-                f"Unexpected stopwords file format. Expected list or dict with 'stopwords' key."
+                "Unexpected stopwords file format. Expected list or dict with 'stopwords' key."
             )
 
         logger.debug(f"Loaded {len(stopwords)} stopwords")
@@ -104,7 +103,7 @@ def load_stopwords(filepath: str = "stwd.json") -> List[str]:
         return []
 
 
-def load_emoji_mappings(filepath: str = "emos.json") -> Dict[str, str]:
+def load_emoji_mappings(filepath: str = "emos.json") -> dict[str, str]:
     """
     Load emoji to meaning mappings from JSON file.
 
@@ -152,7 +151,7 @@ def load_emoji_mappings(filepath: str = "emos.json") -> Dict[str, str]:
         return {}
 
 
-def load_sentiment_ratings(filepath: str = "sent_rating.json") -> Dict[str, Any]:
+def load_sentiment_ratings(filepath: str = "sent_rating.json") -> dict[str, Any]:
     """
     Load sentiment ratings from JSON file.
 

@@ -5,7 +5,6 @@ Provides wrapper for TextRazor API with configuration and error handling.
 """
 
 import logging
-from typing import Optional
 
 import textrazor
 
@@ -39,7 +38,7 @@ def get_textrazor_client(api_key: str, language: str = "ger") -> textrazor.TextR
     return client
 
 
-def configure_textrazor(api_key: Optional[str] = None, language: str = "ger"):
+def configure_textrazor(api_key: str | None = None, language: str = "ger"):
     """
     Configure TextRazor API with given settings.
 

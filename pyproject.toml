@@ -9,8 +9,7 @@ exclude = '''
   | __pycache__
   | build
   | dist
-  | streamlit_app_old\.py
-  | streamlit_app_backup\.py
+  | local_profile_generator\.py
 )/
 '''
 
@@ -23,8 +22,7 @@ exclude = [
     "__pycache__",
     "build",
     "dist",
-    "streamlit_app_old.py",
-    "streamlit_app_backup.py",
+    "local_profile_generator.py",
 ]
 
 [tool.ruff.lint]
@@ -68,8 +66,7 @@ source = ["app"]
 omit = [
     "*/tests/*",
     "*/test_*.py",
-    "streamlit_app_old.py",
-    "streamlit_app_backup.py",
+    "local_profile_generator.py",
 ]
 
 [tool.coverage.report]

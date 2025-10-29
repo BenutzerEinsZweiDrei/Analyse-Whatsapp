@@ -5,11 +5,11 @@ Unit tests for topic extraction.
 import pytest
 
 from app.core.topic_extraction import (
-    simple_tfidf_keywords,
-    extract_topics,
-    calculate_keyword_coherence,
-    find_representative_messages,
     aggregate_topics_by_sentiment,
+    calculate_keyword_coherence,
+    extract_topics,
+    find_representative_messages,
+    simple_tfidf_keywords,
 )
 
 
@@ -182,9 +182,7 @@ class TestTopicsBySentiment:
         sentiments = ["positive", "negative", "positive"]
         message_ids = [1, 2, 3]
 
-        results = aggregate_topics_by_sentiment(
-            texts, sentiments, message_ids, top_n=3
-        )
+        results = aggregate_topics_by_sentiment(texts, sentiments, message_ids, top_n=3)
 
         # Should return dict with sentiment keys
         assert isinstance(results, dict)

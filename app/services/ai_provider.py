@@ -8,7 +8,6 @@ Enhanced with structured JSON prompts and validation.
 import json
 import logging
 import re
-from typing import Dict, Optional
 
 import g4f
 
@@ -56,7 +55,9 @@ Output:
 """
 
 
-def generate_profile(analysis_data: Dict, model: str = "gpt-4o-mini", return_json: bool = False) -> str:
+def generate_profile(
+    analysis_data: dict, model: str = "gpt-4o-mini", return_json: bool = False
+) -> str:
     """
     Generate psychological profile using g4f AI with structured output.
 
@@ -83,7 +84,7 @@ def generate_profile(analysis_data: Dict, model: str = "gpt-4o-mini", return_jso
 
     # Build enhanced structured prompt
     analysis_json = json.dumps(analysis_data, ensure_ascii=False, indent=2)
-    
+
     # Create structured prompt with schema and examples
     message = f"""You are a psychological profiling expert. Based on the WhatsApp conversation analysis below, create a structured personality profile.
 
@@ -151,11 +152,11 @@ Now generate the personality profile in valid JSON format:"""
         except Exception as fallback_error:
             logger.exception(f"g4f ChatCompletion.create also failed: {fallback_error}")
             raise
-    
+
     # Process response
     if not response:
         raise ValueError("Empty response from AI service")
-    
+
     # Try to extract and validate JSON if requested or if response looks like JSON
     if return_json or response.strip().startswith("{"):
         parsed_json = _extract_and_validate_json(response)
@@ -163,26 +164,26 @@ Now generate the personality profile in valid JSON format:"""
             return parsed_json
         elif not parsed_json:
             logger.warning("Failed to parse JSON from AI response, returning text")
-    
+
     return response
 
 
-def _extract_and_validate_json(text: str) -> Optional[Dict]:
+def _extract_and_validate_json(text: str) -> dict | None:
     """
     Extract and validate JSON from AI response text.
-    
+
     Handles common issues like markdown code blocks, extra text, etc.
-    
+
     Args:
         text: Raw response text from AI
-    
+
     Returns:
         Parsed JSON dict if valid, None otherwise
     """
     # Try to extract JSON from markdown code blocks
     json_pattern = r"```(?:json)?\s*(\{.*?\})\s*```"
     match = re.search(json_pattern, text, re.DOTALL)
-    
+
     if match:
         json_text = match.group(1)
     else:
@@ -192,43 +193,49 @@ def _extract_and_validate_json(text: str) -> Optional[Dict]:
             json_text = match.group(0)
         else:
             json_text = text
-    
+
     # Try to parse JSON
     try:
         parsed = json.loads(json_text)
-        
+
         # Validate schema
         if not isinstance(parsed, dict):
             logger.warning("JSON is not a dict")
             return None
-        
+
         # Check for required fields
         if "traits" not in parsed:
             logger.warning("JSON missing 'traits' field")
             return None
-        
+
         # Basic validation of traits
         traits = parsed.get("traits", {})
-        required_traits = ["openness", "conscientiousness", "extraversion", "agreeableness", "neuroticism"]
-        
+        required_traits = [
+            "openness",
+            "conscientiousness",
+            "extraversion",
+            "agreeableness",
+            "neuroticism",
+        ]
+
         for trait in required_traits:
             if trait not in traits:
                 logger.warning(f"Missing trait: {trait}")
                 return None
-            
+
             trait_data = traits[trait]
             if not isinstance(trait_data, dict):
                 logger.warning(f"Trait {trait} is not a dict")
                 return None
-            
+
             # Check for required fields
             if "score" not in trait_data or "label" not in trait_data:
                 logger.warning(f"Trait {trait} missing score or label")
                 return None
-        
+
         logger.info("Successfully validated JSON personality profile")
         return parsed
-        
+
     except json.JSONDecodeError as e:
         logger.warning(f"Failed to parse JSON: {e}")
         return None

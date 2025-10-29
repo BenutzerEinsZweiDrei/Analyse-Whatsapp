@@ -59,3 +59,22 @@ coverage.xml
 # Backup files
 *_backup.py
 *_old.py
+*.bak
+*.backup
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# Data files (don't commit user chat exports)
+data/*.txt
+analysis/*.txt
+*.chat.txt

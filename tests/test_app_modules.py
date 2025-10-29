@@ -15,7 +15,7 @@ from app.config import get_settings, mask_key
 from app.core.emojis import evaluate_emoji_string, extract_emojis
 from app.core.keywords import get_keywords_simple_tf
 from app.core.nouns import extract_nouns
-from app.core.parser import Message, parse_conversations
+from app.core.parsing import Message, parse_conversations
 from app.core.preprocessing import preprocess_text
 from app.core.sentiment import analyze_sentiment, sentiment_label_from_compound
 from app.data.loaders import load_json_asset
@@ -260,7 +260,7 @@ class TestSecurityNoHardcodedKeys(unittest.TestCase):
 
     def test_no_hardcoded_keys_in_streamlit_app(self):
         """Ensure no hard-coded API keys in streamlit_app.py."""
-        with open("streamlit_app.py", "r") as f:
+        with open("streamlit_app.py") as f:
             content = f.read()
 
         # Check for patterns that might indicate hard-coded keys
@@ -277,7 +277,7 @@ class TestSecurityNoHardcodedKeys(unittest.TestCase):
 
     def test_no_hardcoded_keys_in_config(self):
         """Ensure no hard-coded API keys in app/config.py."""
-        with open("app/config.py", "r") as f:
+        with open("app/config.py") as f:
             content = f.read()
 
         # Check patterns

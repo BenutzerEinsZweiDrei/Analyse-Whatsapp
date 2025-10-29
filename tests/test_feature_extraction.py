@@ -2,18 +2,19 @@
 Unit tests for feature extraction module.
 """
 
-import pytest
 from datetime import datetime
 
+import pytest
+
 from app.core.feature_extraction import (
-    extract_message_features,
-    extract_emojis_from_text,
-    detect_language,
-    count_emoticons,
-    extract_urls,
+    aggregate_language_stats,
     calculate_lexical_diversity,
     calculate_stopword_ratio,
-    aggregate_language_stats,
+    count_emoticons,
+    detect_language,
+    extract_emojis_from_text,
+    extract_message_features,
+    extract_urls,
     get_dominant_language,
 )
 

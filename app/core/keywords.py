@@ -6,7 +6,6 @@ Provides gensim LDA-based topic modeling and simple TF-based fallback.
 
 import logging
 from collections import Counter
-from typing import List
 
 from app.core.preprocessing import preprocess_text
 
@@ -16,7 +15,7 @@ logger = logging.getLogger("whatsapp_analyzer")
 MAX_FREQ_WEIGHT = 0.5
 
 
-def get_keywords_gensim(text: str, num_topics: int = 3, num_keywords: int = 5) -> List[str]:
+def get_keywords_gensim(text: str, num_topics: int = 3, num_keywords: int = 5) -> list[str]:
     """
     Extract keywords using gensim LDA topic modeling with frequency weighting.
 
@@ -116,7 +115,7 @@ def get_keywords_gensim(text: str, num_topics: int = 3, num_keywords: int = 5) -
         return []
 
 
-def get_keywords_simple_tf(text: str, num_keywords: int = 15) -> List[str]:
+def get_keywords_simple_tf(text: str, num_keywords: int = 15) -> list[str]:
     """
     Extract keywords using simple term frequency.
 
@@ -155,7 +154,7 @@ def get_keywords_simple_tf(text: str, num_keywords: int = 15) -> List[str]:
     return keywords
 
 
-def get_keywords(text: str, num_topics: int = 3, num_keywords: int = 5) -> List[str]:
+def get_keywords(text: str, num_topics: int = 3, num_keywords: int = 5) -> list[str]:
     """
     Extract keywords from text (wrapper function for backward compatibility).
 

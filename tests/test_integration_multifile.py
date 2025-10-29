@@ -7,7 +7,7 @@ Tests the complete pipeline from file upload to analysis results.
 import unittest
 from unittest.mock import MagicMock, patch
 
-from app.core.parser import merge_and_deduplicate_messages, parse_conversations_from_text
+from app.core.parsing import merge_and_deduplicate_messages, parse_conversations_from_text
 from app.run_analysis import cached_run_analysis, run_analysis_multiple_files
 
 
@@ -31,17 +31,25 @@ class TestMultiFileAnalysisIntegration(unittest.TestCase):
 23.01.21, 16:01 - Bob: Same here"""
 
         self.file_metadata = [
-            {"filename": "chat1.txt", "file_size_bytes": len(self.file1_content), "decode_used": "utf-8"},
-            {"filename": "chat2.txt", "file_size_bytes": len(self.file2_content), "decode_used": "utf-8"},
+            {
+                "filename": "chat1.txt",
+                "file_size_bytes": len(self.file1_content),
+                "decode_used": "utf-8",
+            },
+            {
+                "filename": "chat2.txt",
+                "file_size_bytes": len(self.file2_content),
+                "decode_used": "utf-8",
+            },
         ]
 
     def test_single_file_analysis_backward_compatibility(self):
         """Test that single file analysis still works (backward compatibility)."""
         # This should work exactly as before
         result = cached_run_analysis(self.file1_content, "Alice")
-        
+
         matrix, conversation_messages = result
-        
+
         # Should have conversations
         self.assertIsInstance(matrix, dict)
         self.assertIsInstance(conversation_messages, dict)
@@ -51,19 +59,19 @@ class TestMultiFileAnalysisIntegration(unittest.TestCase):
         """Test complete multi-file analysis workflow."""
         # Simulate multiple file upload
         file_contents = [self.file1_content, self.file2_content]
-        
+
         # Call the multi-file analysis
         result = cached_run_analysis(file_contents, "Alice", self.file_metadata)
-        
+
         matrix, conversation_messages = result
-        
+
         # Verify results
         self.assertIsInstance(matrix, dict)
         self.assertIsInstance(conversation_messages, dict)
-        
+
         # Should have at least one conversation
         self.assertGreater(len(matrix), 0)
-        
+
         # Check that file_origins are tracked
         for conv_idx, conv_data in matrix.items():
             if isinstance(conv_data, dict) and "file_origins" in conv_data:
@@ -75,16 +83,16 @@ class TestMultiFileAnalysisIntegration(unittest.TestCase):
         # Parse both files separately first
         conv1 = parse_conversations_from_text(self.file1_content, file_origin="file1.txt")
         conv2 = parse_conversations_from_text(self.file2_content, file_origin="file2.txt")
-        
+
         # Count messages before merge
         total_before = sum(len(conv) for file_convs in [conv1, conv2] for conv in file_convs)
-        
+
         # Merge and deduplicate
         merged = merge_and_deduplicate_messages([conv1, conv2])
-        
+
         # Count messages after merge
         total_after = sum(len(conv) for conv in merged)
-        
+
         # Should have deduplicated (the overlapping message)
         self.assertLess(total_after, total_before)
 
@@ -95,7 +103,7 @@ class TestMultiFileAnalysisIntegration(unittest.TestCase):
         matrix, conversation_messages = cached_run_analysis(
             file_contents, "Alice", self.file_metadata
         )
-        
+
         # Check conversation messages for file_origin
         for conv_idx, messages in conversation_messages.items():
             for msg in messages:
@@ -109,7 +117,7 @@ class TestMultiFileAnalysisIntegration(unittest.TestCase):
         # Test with empty string
         result = cached_run_analysis("", "Alice")
         matrix, conversation_messages = result
-        
+
         # Should not crash, just return empty results
         self.assertIsInstance(matrix, dict)
         self.assertIsInstance(conversation_messages, dict)
@@ -117,13 +125,13 @@ class TestMultiFileAnalysisIntegration(unittest.TestCase):
     def test_encoding_metadata_preserved(self):
         """Test that encoding metadata is preserved in file_metadata."""
         file_contents = [self.file1_content, self.file2_content]
-        
+
         # The metadata should be passed through
         # (we can't directly test caching behavior, but we can verify the function accepts it)
         result = cached_run_analysis(file_contents, "Alice", self.file_metadata)
-        
+
         matrix, conversation_messages = result
-        
+
         # Should complete without error
         self.assertIsInstance(matrix, dict)
 
@@ -136,16 +144,16 @@ class TestWorkflowSimulation(unittest.TestCase):
         # User uploads one file
         file_content = """23.01.21, 14:30 - Alice: Test message
 23.01.21, 14:31 - Bob: Response"""
-        
+
         username = "Alice"
-        
+
         # Run analysis (single file path)
         matrix, conv_messages = cached_run_analysis(file_content, username)
-        
+
         # Verify results structure
         self.assertIsInstance(matrix, dict)
         self.assertIsInstance(conv_messages, dict)
-        
+
         # Should have analyzed Alice's messages
         for conv_idx, conv_data in matrix.items():
             if isinstance(conv_data, dict):
@@ -157,26 +165,31 @@ class TestWorkflowSimulation(unittest.TestCase):
         # User uploads multiple files
         uploaded_files = [
             ("chat1.txt", "23.01.21, 14:30 - Alice: First file\n23.01.21, 14:31 - Bob: Reply"),
-            ("chat2.txt", "23.01.21, 15:30 - Alice: Second file\n23.01.21, 15:31 - Bob: Reply again"),
+            (
+                "chat2.txt",
+                "23.01.21, 15:30 - Alice: Second file\n23.01.21, 15:31 - Bob: Reply again",
+            ),
         ]
-        
+
         # Process files (simulating Streamlit logic)
         file_contents = []
         file_metadata = []
-        
+
         for filename, content in uploaded_files:
             file_contents.append(content)
-            file_metadata.append({
-                "filename": filename,
-                "file_size_bytes": len(content),
-                "decode_used": "utf-8",
-            })
-        
+            file_metadata.append(
+                {
+                    "filename": filename,
+                    "file_size_bytes": len(content),
+                    "decode_used": "utf-8",
+                }
+            )
+
         username = "Alice"
-        
+
         # Run analysis (multiple files path)
         matrix, conv_messages = cached_run_analysis(file_contents, username, file_metadata)
-        
+
         # Verify results
         self.assertIsInstance(matrix, dict)
         self.assertIsInstance(conv_messages, dict)

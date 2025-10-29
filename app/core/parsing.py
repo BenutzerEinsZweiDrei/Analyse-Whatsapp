@@ -8,7 +8,6 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
 
 logger = logging.getLogger("whatsapp_analyzer")
 
@@ -27,15 +26,15 @@ class Message:
         file_origin: Optional filename indicating source file
     """
 
-    datetime: Optional[str]
+    datetime: str | None
     date: str
     time: str
-    user: Optional[str]
+    user: str | None
     message: str
-    file_origin: Optional[str] = None
+    file_origin: str | None = None
 
 
-def parse_conversations(text: str) -> List[List[Message]]:
+def parse_conversations(text: str) -> list[list[Message]]:
     """
     Parse WhatsApp chat export text into conversations.
 
@@ -116,7 +115,7 @@ def parse_conversations(text: str) -> List[List[Message]]:
     return all_conversations
 
 
-def _parse_datetime(date_str: str, time_str: str) -> Optional[datetime]:
+def _parse_datetime(date_str: str, time_str: str) -> datetime | None:
     """
     Parse date and time strings into datetime object.
 
@@ -147,7 +146,7 @@ def _parse_datetime(date_str: str, time_str: str) -> Optional[datetime]:
     return None
 
 
-def parse_conversations_from_text(text: str, file_origin: Optional[str] = None) -> List[List[dict]]:
+def parse_conversations_from_text(text: str, file_origin: str | None = None) -> list[list[dict]]:
     """
     Legacy function for backward compatibility.
 
@@ -183,8 +182,8 @@ def parse_conversations_from_text(text: str, file_origin: Optional[str] = None) 
 
 
 def merge_and_deduplicate_messages(
-    all_conversations: List[List[List[dict]]],
-) -> List[List[dict]]:
+    all_conversations: list[list[list[dict]]],
+) -> list[list[dict]]:
     """
     Merge multiple conversation lists and deduplicate messages.
 

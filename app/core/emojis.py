@@ -6,14 +6,13 @@ Provides functions to extract emojis from text and evaluate their sentiment.
 
 import logging
 import re
-from typing import Dict, List, Optional
 
 from app.data.loaders import load_emoji_mappings
 
 logger = logging.getLogger("whatsapp_analyzer")
 
 
-def extract_emojis(text: str) -> List[str]:
+def extract_emojis(text: str) -> list[str]:
     """
     Extract emojis from text.
 
@@ -69,7 +68,7 @@ def extract_emojis(text: str) -> List[str]:
     return emojis
 
 
-def evaluate_emoji_string(emojis: List[str], emoji_dict: Optional[Dict[str, str]] = None) -> str:
+def evaluate_emoji_string(emojis: list[str], emoji_dict: dict[str, str] | None = None) -> str:
     """
     Evaluate the sentiment of a list of emojis.
 
@@ -136,7 +135,7 @@ def evaluate_emoji_string(emojis: List[str], emoji_dict: Optional[Dict[str, str]
 
 
 def bewerte_emoji_string(
-    emojis_im_text: List[str], emoji_dict: Optional[Dict[str, str]] = None
+    emojis_im_text: list[str], emoji_dict: dict[str, str] | None = None
 ) -> str:
     """
     Legacy function name for backward compatibility.

@@ -6,12 +6,10 @@ Coordinates all analysis modules to process conversations and generate results.
 
 import logging
 import time
-from collections import defaultdict
-from typing import Dict, List, Tuple, Union
 
 from app.cache import cached_data, cached_resource
 from app.config import get_settings
-from app.core.emojis import evaluate_emoji_string, extract_emojis
+from app.core.emojis import evaluate_emoji_string
 from app.core.keywords import get_keywords
 from app.core.metrics import (
     calculate_emotional_reciprocity,
@@ -19,7 +17,7 @@ from app.core.metrics import (
     calculate_topic_response_time,
 )
 from app.core.nouns import extract_nouns
-from app.core.parser import (
+from app.core.parsing import (
     merge_and_deduplicate_messages,
     parse_conversations_from_text,
 )
@@ -54,9 +52,9 @@ def get_emot_object():
 
 @cached_data(show_spinner=False)
 def cached_run_analysis(
-    file_content: Union[str, List[str]],
+    file_content: str | list[str],
     username: str,
-    file_metadata: List[dict] = None,
+    file_metadata: list[dict] = None,
 ):
     """
     Cached wrapper for run_analysis to avoid recomputing identical analysis.
@@ -83,10 +81,10 @@ def cached_run_analysis(
 
 
 def run_analysis_multiple_files(
-    file_contents: List[str],
+    file_contents: list[str],
     username: str,
-    file_metadata: List[dict],
-) -> Tuple[Dict, Dict]:
+    file_metadata: list[dict],
+) -> tuple[dict, dict]:
     """
     Run analysis on multiple merged files.
 
@@ -175,7 +173,7 @@ def run_analysis_multiple_files(
 def _process_conversation(idx, text, conv_msgs, matrix, empath_lex, emot_obj, settings):
     """
     Process a single conversation with all analysis steps.
-    
+
     Extracted as helper function to avoid code duplication between
     single-file and multi-file analysis.
     """
@@ -185,9 +183,7 @@ def _process_conversation(idx, text, conv_msgs, matrix, empath_lex, emot_obj, se
         emojis = emoji_result.get("value", [])
         matrix[idx]["emojies"] = emojis
         matrix[idx]["emo_bew"] = [evaluate_emoji_string(emojis)]
-        logger.debug(
-            f"Conversation #{idx}: emojis={len(emojis)}, emo_bew={matrix[idx]['emo_bew']}"
-        )
+        logger.debug(f"Conversation #{idx}: emojis={len(emojis)}, emo_bew={matrix[idx]['emo_bew']}")
     except Exception as e:
         logger.exception(f"Error extracting emojis for conversation {idx}: {e}")
         matrix[idx]["emojies"] = []
@@ -334,7 +330,7 @@ def _process_conversation(idx, text, conv_msgs, matrix, empath_lex, emot_obj, se
         matrix[idx]["emotional_reciprocity"] = 0.5
 
 
-def run_analysis(file_content: str, username: str) -> Tuple[Dict, Dict]:
+def run_analysis(file_content: str, username: str) -> tuple[dict, dict]:
     """
     Run complete conversation analysis pipeline.
 

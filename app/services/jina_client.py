@@ -6,7 +6,6 @@ Provides wrapper for Jina AI text classification API with error handling and log
 
 import logging
 import time
-from typing import Dict, List, Optional
 
 import requests
 
@@ -15,11 +14,11 @@ logger = logging.getLogger("whatsapp_analyzer")
 
 def classify_texts(
     inputs: str,
-    labels: List[str],
+    labels: list[str],
     model: str = "jina-embeddings-v3",
-    api_key: Optional[str] = None,
+    api_key: str | None = None,
     timeout: int = 30,
-) -> Dict:
+) -> dict:
     """
     Classify text using Jina AI classification API.
 

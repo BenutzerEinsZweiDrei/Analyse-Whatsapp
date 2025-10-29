@@ -21,9 +21,9 @@ from app.config import get_settings, mask_key
 from app.core.local_profile import merge_local_profiles, run_local_analysis
 from app.core.preprocessing import init_nltk
 from app.core.summarizer import summarize_matrix
-from app.logging_config import configure_logging, get_logs, set_debug_mode
 from app.run_analysis import cached_run_analysis
-from app.services.g4f_client import generate_profile, handle_g4f_error
+from app.services.ai_provider import generate_profile, handle_g4f_error
+from app.utils.logging_config import configure_logging, get_logs, set_debug_mode
 
 # ---------------------------
 # Initialize Application
@@ -122,7 +122,8 @@ st.info(
 
 # Add explanatory expander about profile types
 with st.expander("ℹ️ Understanding Profile Types"):
-    st.markdown("""
+    st.markdown(
+        """
     **Local Profile (Privacy-Focused):**
     - Runs entirely on your machine using statistical analysis
     - No data sent to external services
@@ -141,7 +142,8 @@ with st.expander("ℹ️ Understanding Profile Types"):
     - Combines multiple Local Profiles into a comprehensive view
     - Useful when analyzing the same person across different time periods or chat groups
     - Requires at least 2 Local Profiles to merge
-    """)
+    """
+    )
 
 with st.form("upload_form"):
     uploaded_files = st.file_uploader(
@@ -251,7 +253,11 @@ if st.session_state.files:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        if st.button("🔄 Analyze All Files", key="analyze_all", help="Run conversation analysis on all uploaded files. This extracts messages, topics, sentiment, emotions, and personality traits."):
+        if st.button(
+            "🔄 Analyze All Files",
+            key="analyze_all",
+            help="Run conversation analysis on all uploaded files. This extracts messages, topics, sentiment, emotions, and personality traits.",
+        ):
             for file_state in st.session_state.files:
                 if file_state["analysis_status"] not in ["success"]:
                     file_state["analysis_status"] = "queued"

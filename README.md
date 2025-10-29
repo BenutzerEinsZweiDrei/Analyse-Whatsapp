@@ -170,36 +170,116 @@ To export a WhatsApp chat:
 
 ## Development
 
-### Running Tests
+### Quick Start with Make
+
+This project includes a Makefile for common development tasks:
 
 ```bash
-# Run all tests
-python -m unittest discover tests/ -v
+# Show all available commands
+make help
 
-# Run specific test file
-python -m unittest tests.test_app_modules -v
+# Install production dependencies
+make install
 
-# Run with pytest (if installed)
-pytest tests/ -v
+# Install development dependencies (includes testing and linting tools)
+make install-dev
 
-# Run with coverage
-pytest tests/ -v --cov=app --cov-report=term-missing
+# Run tests
+make test
+
+# Run linters (ruff, black, isort)
+make lint
+
+# Auto-format code
+make format
+
+# Clean build artifacts and caches
+make clean
+
+# Run Streamlit app
+make run
 ```
 
-### Linting and Formatting
+### Manual Setup
 
+If you prefer not to use Make, here are the equivalent commands:
+
+**Install dependencies:**
 ```bash
-# Install development dependencies
-pip install ruff black isort pytest pytest-cov
+# Production dependencies
+pip install -r requirements.txt
 
-# Run linter
-ruff check .
+# Development dependencies
+pip install pytest pytest-cov black ruff isort
+```
 
-# Format code
-black .
+**Run tests:**
+```bash
+# Run all tests with pytest
+python -m pytest tests/ -v
 
-# Sort imports
-isort .
+# Run with coverage report
+python -m pytest tests/ -v --cov=app --cov-report=term-missing --cov-report=html
+
+# Run specific test file
+python -m pytest tests/test_app_modules.py -v
+```
+
+**Linting and formatting:**
+```bash
+# Check code style
+ruff check . --extend-exclude="local_profile_generator.py"
+black --check . --extend-exclude="local_profile_generator.py"
+isort --check-only --profile black . --skip local_profile_generator.py
+
+# Auto-fix formatting
+black . --extend-exclude="local_profile_generator.py"
+isort . --profile black --skip local_profile_generator.py
+ruff check . --fix --extend-exclude="local_profile_generator.py"
+```
+
+**Run the application:**
+```bash
+streamlit run streamlit_app.py
+```
+
+### Project Structure
+
+```
+Analyse-Whatsapp/
+├── streamlit_app.py          # Main UI entry point (thin wrapper)
+├── app/                       # Core application package
+│   ├── config.py             # Settings and API key management
+│   ├── cache.py              # Caching utilities
+│   ├── run_analysis.py       # Main analysis orchestrator
+│   ├── core/                 # Core analysis modules
+│   │   ├── parsing.py        # WhatsApp message parsing
+│   │   ├── preprocessing.py  # Text preprocessing
+│   │   ├── feature_extraction.py    # Feature extraction
+│   │   ├── sentiment_enhanced.py    # Sentiment analysis
+│   │   ├── emotion_detection.py     # Emotion detection
+│   │   ├── topic_extraction.py      # Topic modeling
+│   │   ├── personality.py           # Personality trait calculation
+│   │   ├── local_profile.py         # Local profile generation
+│   │   └── summarizer.py            # Result summarization
+│   ├── services/             # External service integrations
+│   │   ├── ai_provider.py    # AI profile generation (g4f)
+│   │   ├── jina_client.py    # Jina AI text classification
+│   │   └── textrazor_client.py      # TextRazor NLP
+│   ├── utils/                # Utility modules
+│   │   ├── logging_config.py        # Centralized logging
+│   │   ├── io.py                    # File I/O helpers
+│   │   └── types.py                 # Type definitions
+│   └── data/                 # Data loaders
+│       └── loaders.py
+├── tests/                     # Test suite
+│   ├── fixtures/             # Test data
+│   └── test_*.py             # Test modules
+├── .github/workflows/        # CI/CD configuration
+├── pyproject.toml            # Project configuration (Black, Ruff, pytest)
+├── requirements.txt          # Python dependencies
+├── Makefile                  # Development commands
+└── README.md                 # This file
 ```
 
 ### Code Structure Guidelines

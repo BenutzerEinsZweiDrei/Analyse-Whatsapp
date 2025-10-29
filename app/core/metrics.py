@@ -5,12 +5,11 @@ Provides response time tracking and emotional reciprocity scoring.
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
 
 logger = logging.getLogger("whatsapp_analyzer")
 
 
-def calculate_response_times(messages: List[Dict]) -> Dict[str, float]:
+def calculate_response_times(messages: list[dict]) -> dict[str, float]:
     """
     Calculate average response times per user based on message timestamps.
 
@@ -66,7 +65,7 @@ def calculate_response_times(messages: List[Dict]) -> Dict[str, float]:
     return avg_response_times
 
 
-def calculate_topic_response_time(topic_messages: List[Dict]) -> float:
+def calculate_topic_response_time(topic_messages: list[dict]) -> float:
     """
     Calculate average response time for a specific topic/conversation.
 
@@ -88,7 +87,7 @@ def calculate_topic_response_time(topic_messages: List[Dict]) -> float:
     return round(avg, 2)
 
 
-def calculate_emoji_valence(emojis: List[str], emoji_dict: Optional[Dict] = None) -> float:
+def calculate_emoji_valence(emojis: list[str], emoji_dict: dict | None = None) -> float:
     """
     Calculate the average emotional valence of emojis.
 
@@ -106,7 +105,7 @@ def calculate_emoji_valence(emojis: List[str], emoji_dict: Optional[Dict] = None
         try:
             import json
 
-            with open("data/emos.json", "r", encoding="utf-8") as f:
+            with open("data/emos.json", encoding="utf-8") as f:
                 data = json.load(f)
                 emoji_dict = {entry["emoji"]: entry["meaning"] for entry in data["emojis"]}
         except Exception as e:
@@ -129,7 +128,7 @@ def calculate_emoji_valence(emojis: List[str], emoji_dict: Optional[Dict] = None
 
 
 def calculate_emotional_reciprocity(
-    messages: List[Dict], emoji_dict: Optional[Dict] = None
+    messages: list[dict], emoji_dict: dict | None = None
 ) -> float:
     """
     Calculate emotional reciprocity as similarity between consecutive participants'
@@ -207,12 +206,12 @@ def calculate_emotional_reciprocity(
 
 def aggregate_topic_metrics(
     topic: str,
-    messages: List[Dict],
-    big_five: Dict[str, float],
+    messages: list[dict],
+    big_five: dict[str, float],
     mbti: str,
-    emotion_analysis: Dict,
-    emoji_dict: Optional[Dict] = None,
-) -> Dict:
+    emotion_analysis: dict,
+    emoji_dict: dict | None = None,
+) -> dict:
     """
     Aggregate all computed metrics for a single topic.
 

@@ -5,7 +5,6 @@ Wraps VADER sentiment analyzer and provides sentiment label conversion.
 """
 
 import logging
-from typing import Dict
 
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
@@ -59,7 +58,7 @@ def compound_to_rating(compound_score: float) -> float:
     return round(rating, 1)
 
 
-def analyze_sentiment(text: str) -> Dict:
+def analyze_sentiment(text: str) -> dict:
     """
     Analyze sentiment of text using VADER.
 
