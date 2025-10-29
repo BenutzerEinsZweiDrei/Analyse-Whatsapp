@@ -92,7 +92,7 @@ def test_no_rerun_in_processing_loops():
     """
     # Read the streamlit_app.py file
     app_file = Path(__file__).parent.parent / "streamlit_app.py"
-    with open(app_file) as f:
+    with open(app_file, encoding="utf-8") as f:
         content = f.read()
         lines = content.split("\n")
 
@@ -138,7 +138,7 @@ def test_state_changed_flag_exists():
     Test that state_changed flag is used to batch rerun calls.
     """
     app_file = Path(__file__).parent.parent / "streamlit_app.py"
-    with open(app_file) as f:
+    with open(app_file, encoding="utf-8") as f:
         content = f.read()
 
     # Check for state_changed flag
@@ -154,7 +154,7 @@ def test_bulk_action_buttons_exist():
     Test that bulk action buttons are present in the app.
     """
     app_file = Path(__file__).parent.parent / "streamlit_app.py"
-    with open(app_file) as f:
+    with open(app_file, encoding="utf-8") as f:
         content = f.read()
 
     # Check for bulk action buttons
@@ -169,7 +169,7 @@ def test_merge_cta_message_exists():
     Test that merge CTA message is shown when 2+ profiles exist.
     """
     app_file = Path(__file__).parent.parent / "streamlit_app.py"
-    with open(app_file) as f:
+    with open(app_file, encoding="utf-8") as f:
         content = f.read()
 
     # Check for merge CTA
