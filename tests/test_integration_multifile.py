@@ -87,10 +87,6 @@ class TestMultiFileAnalysisIntegration(unittest.TestCase):
         
         # Should have deduplicated (the overlapping message)
         self.assertLess(total_after, total_before)
-        
-        print(f"Messages before merge: {total_before}")
-        print(f"Messages after merge: {total_after}")
-        print(f"Duplicates removed: {total_before - total_after}")
 
     def test_file_origin_tracking(self):
         """Test that file origins are properly tracked."""
@@ -185,9 +181,6 @@ class TestWorkflowSimulation(unittest.TestCase):
         self.assertIsInstance(matrix, dict)
         self.assertIsInstance(conv_messages, dict)
         self.assertGreater(len(matrix), 0)
-        
-        print(f"Analyzed {len(uploaded_files)} files")
-        print(f"Generated {len(matrix)} conversation analyses")
 
 
 if __name__ == "__main__":

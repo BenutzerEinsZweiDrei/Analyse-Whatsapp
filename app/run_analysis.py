@@ -122,7 +122,7 @@ def run_analysis_multiple_files(
     # Merge and deduplicate
     merged_conversations = merge_and_deduplicate_messages(all_conversations)
 
-    # Parse merged conversations and run standard analysis
+    # Process merged conversations and run standard analysis
     logger.info(f"Processing {len(merged_conversations)} merged conversations")
     start_time = time.time()
 
