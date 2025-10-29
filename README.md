@@ -4,17 +4,30 @@ A Streamlit-based application to analyze WhatsApp chat conversations using senti
 
 > **📢 Update (October 2025)**: The separate Profile Fusion page has been deprecated. The main app now supports uploading and merging 1-5 WhatsApp export files directly! See [Usage](#usage) for details.
 
+> **✨ Enhanced Analysis (October 2025)**: Major improvements to analysis accuracy and depth! New ensemble sentiment/emotion detection, advanced topic extraction, and richer personality profiles with confidence scores and evidence. See [ENHANCED_ANALYSIS.md](ENHANCED_ANALYSIS.md) for details.
+
 ## Features
 
-- **Multi-File Support**: Upload and merge 1-5 WhatsApp export files automatically (NEW!)
-- **Sentiment Analysis**: Analyze the emotional tone of conversations using VADER sentiment analysis
-- **Personality Profiling**: Calculate Big Five (OCEAN) personality traits and MBTI types
-- **Emotion Analysis**: Detect and categorize emotions from text and emojis
+### Core Features
+- **Multi-File Support**: Upload and merge 1-5 WhatsApp export files automatically
+- **Advanced Sentiment Analysis**: Ensemble approach combining VADER + transformer models (optional) + emoji analysis
+- **Enhanced Emotion Detection**: Multi-method emotion classification with 7 emotion categories and confidence scores
+- **Personality Profiling**: Calculate Big Five (OCEAN) personality traits and MBTI types with evidence
+- **Robust Feature Extraction**: Comprehensive message metadata including linguistic features, emojis, URLs, mentions
+- **Advanced Topic Extraction**: KeyBERT, YAKE, and TF-IDF with coherence scores and representative messages
 - **Response Time Tracking**: Measure conversation dynamics and response patterns
 - **Emotional Reciprocity**: Evaluate mutual emotional engagement between participants
-- **Topic Classification**: Automatically identify conversation topics (requires Jina AI API key)
 - **Local Psychological Profile Generation**: Generate comprehensive psychological profiles without external AI services
-- **AI-Powered Profiles**: Optional integration with g4f for AI-generated summaries
+- **AI-Powered Profiles**: Enhanced integration with g4f using structured JSON prompts with validation
+
+### Enhanced Analysis Capabilities
+- **Confidence Scores**: All analysis results include confidence metrics
+- **Evidence-Based**: Personality traits include supporting message snippets
+- **Multilingual Support**: Language detection and multi-language keyword extraction
+- **Graceful Degradation**: Works with or without optional ML libraries
+- **Enriched Outputs**: Detailed per-author statistics, topic coherence, feature summaries
+
+📖 **See [ENHANCED_ANALYSIS.md](ENHANCED_ANALYSIS.md) for detailed documentation on new features.**
 
 ## Architecture
 
@@ -30,25 +43,31 @@ The application has been refactored into a modular structure:
 │   ├── data/                 # Data loaders
 │   │   └── loaders.py
 │   ├── core/                 # Core analysis modules
-│   │   ├── parser.py         # WhatsApp message parsing
-│   │   ├── preprocessing.py  # Text preprocessing
-│   │   ├── keywords.py       # Keyword extraction
-│   │   ├── nouns.py          # Noun extraction
-│   │   ├── emojis.py         # Emoji analysis
-│   │   ├── sentiment.py      # Sentiment analysis
-│   │   ├── metrics.py        # Response times, reciprocity
-│   │   ├── personality.py    # Big Five, MBTI, emotions
-│   │   ├── local_profile.py  # Local analysis pipeline
-│   │   └── summarizer.py     # Matrix summarization
+│   │   ├── parser.py              # WhatsApp message parsing
+│   │   ├── preprocessing.py       # Text preprocessing
+│   │   ├── feature_extraction.py  # 🆕 Robust feature extraction
+│   │   ├── sentiment_enhanced.py  # 🆕 Ensemble sentiment analysis
+│   │   ├── emotion_detection.py   # 🆕 Multi-method emotion detection
+│   │   ├── topic_extraction.py    # 🆕 Advanced topic/keyword extraction
+│   │   ├── keywords.py            # Keyword extraction
+│   │   ├── nouns.py               # Noun extraction
+│   │   ├── emojis.py              # Emoji analysis
+│   │   ├── sentiment.py           # VADER sentiment analysis
+│   │   ├── metrics.py             # Response times, reciprocity
+│   │   ├── personality.py         # Big Five, MBTI, emotions
+│   │   ├── local_profile.py       # Local analysis pipeline
+│   │   └── summarizer.py          # Matrix summarization (enhanced)
 │   └── services/             # External service clients
 │       ├── jina_client.py    # Jina AI classification
 │       ├── textrazor_client.py # TextRazor NLP
-│       └── g4f_client.py     # g4f AI generation
-├── tests/                     # Comprehensive test suite
+│       └── g4f_client.py     # g4f AI generation (enhanced)
+├── tests/                     # Comprehensive test suite (195 tests)
 └── data/                      # JSON assets (stopwords, emojis, etc.)
 ```
 
 ## Installation
+
+### Basic Installation
 
 1. Clone the repository
 ```bash
@@ -56,10 +75,29 @@ git clone https://github.com/BenutzerEinsZweiDrei/Analyse-Whatsapp.git
 cd Analyse-Whatsapp
 ```
 
-2. Install dependencies:
+2. Install core dependencies:
 ```bash
 pip install -r requirements.txt
 ```
+
+### Optional: Enhanced Analysis Features
+
+For best accuracy, install optional dependencies (recommended):
+
+```bash
+# Tier 2: Basic enhancements (small, fast)
+pip install emoji langdetect yake scikit-learn
+
+# Tier 3: Advanced ML models (large downloads, ~500MB)
+pip install transformers torch sentence-transformers keybert
+
+# For CPU-only (lighter)
+pip install transformers torch --index-url https://download.pytorch.org/whl/cpu
+```
+
+**Note:** The app works without optional dependencies but with reduced accuracy. See [ENHANCED_ANALYSIS.md](ENHANCED_ANALYSIS.md) for details.
+
+### API Keys Configuration (Optional)
 
 3. Configure API keys (optional but recommended):
 
