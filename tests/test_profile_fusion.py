@@ -9,7 +9,7 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from pages.Profile_Fusion import merge_mbti, merge_big_five, merge_emotions
+from analysis import merge_mbti, merge_big_five, merge_emotions
 
 
 class TestProfileFusion(unittest.TestCase):
@@ -162,12 +162,14 @@ class TestProfileFusion(unittest.TestCase):
 
         result = merge_big_five(test_data)
         
-        # Verify structure
+        # Verify structure (v2.0 format with mean, std, count)
         self.assertIn('trait', result.columns)
-        self.assertIn('average_score', result.columns)
+        self.assertIn('mean', result.columns)
+        self.assertIn('std', result.columns)
+        self.assertIn('count', result.columns)
         
         # Verify averaging
-        openness_score = result[result['trait'] == 'openness']['average_score'].values[0]
+        openness_score = result[result['trait'] == 'openness']['mean'].values[0]
         self.assertAlmostEqual(openness_score, 7.0, places=2)
 
     def test_merge_emotions_basic(self):
